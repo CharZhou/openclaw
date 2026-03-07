@@ -161,6 +161,7 @@ export async function runToolModelOrchestrator(
   const runEmbedded = deps.runEmbedded ?? runEmbeddedPiAgent;
   const sessionId = createEphemeralId("orch-tool");
   const nestedRunId = createEphemeralId("orch-run");
+  const nestedSessionKey = `agent:orch:${sessionId}`;
   const sessionFile = path.join(os.tmpdir(), `openclaw-orchestration-${sessionId}.jsonl`);
 
   try {
@@ -168,7 +169,7 @@ export async function runToolModelOrchestrator(
     const nestedResult = await runEmbedded({
       sessionId,
       sessionFile,
-      sessionKey: params.sessionKey,
+      sessionKey: nestedSessionKey,
       workspaceDir: params.workspaceDir,
       agentDir: params.agentDir,
       config: params.config,
