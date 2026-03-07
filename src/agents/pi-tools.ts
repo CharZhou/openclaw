@@ -3,6 +3,7 @@ import type { OpenClawConfig } from "../config/config.js";
 import type { ToolLoopDetectionConfig } from "../config/types.tools.js";
 import { resolveMergedSafeBinProfileFixtures } from "../infra/exec-safe-bin-runtime-policy.js";
 import { logWarn } from "../logger.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { getPluginToolMeta } from "../plugins/tools.js";
 import { isSubagentSessionKey } from "../routing/session-key.js";
 import { resolveGatewayMessageChannel } from "../utils/message-channel.js";
@@ -57,6 +58,8 @@ import {
 } from "./tool-policy.js";
 import { createDelegateToToolModelTool } from "./tools/delegate-to-tool-model.js";
 import { resolveWorkspaceRoot } from "./workspace-dir.js";
+
+const log = createSubsystemLogger("agents/pi-tools");
 
 function isOpenAIProvider(provider?: string) {
   const normalized = provider?.trim().toLowerCase();
@@ -587,5 +590,10 @@ export function createOpenClawCodingTools(options?: {
   // NOTE: Keep canonical (lowercase) tool names here.
   // pi-ai's Anthropic OAuth transport remaps tool names to Claude Code-style names
   // on the wire and maps them back for tool dispatch.
+  if (options?.config?.orchestration?.enabled) {
+    log.info(
+      `[orch-debug] createOpenClawCodingTools session=${String(options?.sessionId ?? options?.sessionKey ?? "unknown")} injected=${withAbort.some((tool) => tool.name === "delegate_to_tool_model")} tools=${withAbort.map((tool) => tool.name).join(",")}`,
+    );
+  }
   return withAbort;
 }
