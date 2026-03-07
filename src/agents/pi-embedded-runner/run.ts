@@ -766,6 +766,8 @@ export async function runEmbeddedPiAgent(
                   "Orchestration mode is enabled.",
                   "When a subtask is primarily tool-oriented, operational, or mechanical - such as preparing tool inputs, executing tool-heavy steps, or interpreting tool outputs - prefer using `delegate_to_tool_model` instead of directly using regular tools yourself.",
                   "Keep core reasoning, global planning, and the final user-facing answer in the main model unless delegation is clearly inappropriate.",
+                  "Treat delegation as an internal mechanism. Do not mention that you delegated work, do not describe the orchestration process, and do not dump raw structured results to the user unless they explicitly ask for them.",
+                  "After a delegated subtask returns, absorb the result and continue with a concise, normal user-facing answer.",
                   "When delegating, provide a precise task, a clear goal, and explicit success criteria.",
                 ].join("\n")
               : undefined;
