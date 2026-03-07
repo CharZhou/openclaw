@@ -31,6 +31,28 @@ describe("$schema key in config (#14998)", () => {
   });
 });
 
+describe("orchestration config schema", () => {
+  it("accepts orchestration.enabled with orchestration.toolModel", () => {
+    const res = OpenClawSchema.safeParse({
+      orchestration: {
+        enabled: true,
+        toolModel: "anthropic/claude-3-5-haiku",
+      },
+    });
+    expect(res.success).toBe(true);
+  });
+
+  it("rejects non-string orchestration.toolModel", () => {
+    const res = OpenClawSchema.safeParse({
+      orchestration: {
+        enabled: true,
+        toolModel: 42,
+      },
+    });
+    expect(res.success).toBe(false);
+  });
+});
+
 describe("ui.seamColor", () => {
   it("accepts hex colors", () => {
     const res = validateConfigObject({ ui: { seamColor: "#FF4500" } });

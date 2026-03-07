@@ -60,6 +60,8 @@ export type RunEmbeddedPiAgentParams = {
   requireExplicitMessageTarget?: boolean;
   /** If true, omit the message tool from the tool list. */
   disableMessageTool?: boolean;
+  /** Internal guard to prevent recursive delegate_to_tool_model exposure. */
+  disableOrchestrationDelegateTool?: boolean;
   sessionFile: string;
   workspaceDir: string;
   agentDir?: string;

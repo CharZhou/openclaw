@@ -276,6 +276,13 @@ export const OpenClawSchema = z
       })
       .strict()
       .optional(),
+    orchestration: z
+      .object({
+        enabled: z.boolean().optional(),
+        toolModel: z.string().optional(),
+      })
+      .strict()
+      .optional(),
     browser: z
       .object({
         enabled: z.boolean().optional(),

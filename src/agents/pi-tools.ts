@@ -55,6 +55,7 @@ import {
   mergeAlsoAllowPolicy,
   resolveToolProfilePolicy,
 } from "./tool-policy.js";
+import { createDelegateToToolModelTool } from "./tools/delegate-to-tool-model.js";
 import { resolveWorkspaceRoot } from "./workspace-dir.js";
 
 function isOpenAIProvider(provider?: string) {
@@ -144,6 +145,20 @@ function resolveExecConfig(params: { cfg?: OpenClawConfig; agentId?: string }) {
   };
 }
 
+function shouldInjectDelegateToToolModel(options?: {
+  config?: OpenClawConfig;
+  disableOrchestrationDelegateTool?: boolean;
+}): boolean {
+  if (options?.disableOrchestrationDelegateTool) {
+    return false;
+  }
+  const orchestration = options?.config?.orchestration;
+  if (orchestration?.enabled !== true) {
+    return false;
+  }
+  return !!orchestration.toolModel?.trim();
+}
+
 export function resolveToolLoopDetectionConfig(params: {
   cfg?: OpenClawConfig;
   agentId?: string;
@@ -192,6 +207,8 @@ export function createOpenClawCodingTools(options?: {
   sessionId?: string;
   /** Stable run identifier for this agent invocation. */
   runId?: string;
+  /** Current run timeout in milliseconds (forwarded to orchestration helpers). */
+  runTimeoutMs?: number;
   agentDir?: string;
   workspaceDir?: string;
   config?: OpenClawConfig;
@@ -240,6 +257,8 @@ export function createOpenClawCodingTools(options?: {
   disableMessageTool?: boolean;
   /** Whether the sender is an owner (required for owner-only tools). */
   senderIsOwner?: boolean;
+  /** Internal guard to prevent recursive delegate_to_tool_model exposure. */
+  disableOrchestrationDelegateTool?: boolean;
 }): AnyAgentTool[] {
   const execToolName = "exec";
   const sandbox = options?.sandbox?.enabled ? options.sandbox : undefined;
@@ -499,6 +518,24 @@ export function createOpenClawCodingTools(options?: {
       senderIsOwner: options?.senderIsOwner,
       sessionId: options?.sessionId,
     }),
+    ...(shouldInjectDelegateToToolModel({
+      config: options?.config,
+      disableOrchestrationDelegateTool: options?.disableOrchestrationDelegateTool,
+    })
+      ? [
+          createDelegateToToolModelTool({
+            config: options?.config,
+            sessionKey: options?.sessionKey,
+            workspaceDir: workspaceRoot,
+            agentDir: options?.agentDir,
+            messageChannel: resolveGatewayMessageChannel(options?.messageProvider),
+            messageProvider: options?.messageProvider,
+            agentAccountId: options?.agentAccountId,
+            runId: options?.runId,
+            timeoutMs: options?.runTimeoutMs,
+          }),
+        ]
+      : []),
   ];
   const toolsForMessageProvider = applyMessageProviderToolPolicy(tools, options?.messageProvider);
   // Security: treat unknown/undefined as unauthorized (opt-in, not opt-out)

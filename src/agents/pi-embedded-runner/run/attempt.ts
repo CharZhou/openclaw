@@ -776,6 +776,7 @@ export async function runEmbeddedAttempt(
           sessionKey: sandboxSessionKey,
           sessionId: params.sessionId,
           runId: params.runId,
+          runTimeoutMs: params.timeoutMs,
           agentDir,
           workspaceDir: effectiveWorkspace,
           config: params.config,
@@ -793,6 +794,7 @@ export async function runEmbeddedAttempt(
           requireExplicitMessageTarget:
             params.requireExplicitMessageTarget ?? isSubagentSessionKey(params.sessionKey),
           disableMessageTool: params.disableMessageTool,
+          disableOrchestrationDelegateTool: params.disableOrchestrationDelegateTool,
         });
     const tools = sanitizeToolsForGoogle({ tools: toolsRaw, provider: params.provider });
     const allowedToolNames = collectAllowedToolNames({
