@@ -759,6 +759,22 @@ export async function runEmbeddedPiAgent(
           const prompt =
             provider === "anthropic" ? scrubAnthropicRefusalMagic(params.prompt) : params.prompt;
 
+          const orchestrationPrompt =
+            params.config?.orchestration?.enabled === true &&
+            !params.disableOrchestrationDelegateTool
+              ? [
+                  "Orchestration mode is enabled.",
+                  "When a subtask is primarily tool-oriented, operational, or mechanical - such as preparing tool inputs, executing tool-heavy steps, or interpreting tool outputs - prefer using `delegate_to_tool_model` instead of directly using regular tools yourself.",
+                  "Keep core reasoning, global planning, and the final user-facing answer in the main model unless delegation is clearly inappropriate.",
+                  "When delegating, provide a precise task, a clear goal, and explicit success criteria.",
+                ].join("\n")
+              : undefined;
+          const combinedExtraSystemPrompt = [params.extraSystemPrompt, orchestrationPrompt]
+            .filter(
+              (value): value is string => typeof value === "string" && value.trim().length > 0,
+            )
+            .join("\n\n");
+
           const attempt = await runEmbeddedAttempt({
             sessionId: params.sessionId,
             sessionKey: params.sessionKey,
@@ -817,7 +833,7 @@ export async function runEmbeddedPiAgent(
             onReasoningEnd: params.onReasoningEnd,
             onToolResult: params.onToolResult,
             onAgentEvent: params.onAgentEvent,
-            extraSystemPrompt: params.extraSystemPrompt,
+            extraSystemPrompt: combinedExtraSystemPrompt || undefined,
             inputProvenance: params.inputProvenance,
             streamParams: params.streamParams,
             ownerNumbers: params.ownerNumbers,
