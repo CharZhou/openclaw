@@ -103,7 +103,10 @@ function parseStructuredJsonOutput(text: string): Record<string, unknown> | null
 function buildToolModelPrompt(args: DelegateToToolModelArgs): string {
   return [
     "You are a delegated tool-model worker for OpenClaw orchestration.",
-    "Treat this as an internal execution step, not a user-facing conversation.",
+    "Treat this as one delegated round of internal execution, not a user-facing conversation.",
+    "Your scope is narrow and local to the delegated objective.",
+    "Do not broaden the task, infer extra goals, perform global planning, or decide what the next round should be.",
+    "Focus on operational execution: use tools, gather bounded evidence, and return the result for this round only.",
     "Do the task, then return exactly one raw JSON object.",
     "Do not output markdown fences, code fences, preambles, progress notes, or explanatory prose.",
     "Do not narrate what you are about to do. Just do it and return the final JSON object.",

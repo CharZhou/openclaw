@@ -765,10 +765,13 @@ export async function runEmbeddedPiAgent(
               ? [
                   "Orchestration mode is enabled.",
                   "When a subtask is primarily tool-oriented, operational, or mechanical - such as preparing tool inputs, executing tool-heavy steps, or interpreting tool outputs - prefer using `delegate_to_tool_model` instead of directly using regular tools yourself.",
-                  "Keep core reasoning, global planning, and the final user-facing answer in the main model unless delegation is clearly inappropriate.",
+                  "Prefer small, focused delegation rounds over one large delegation. Each delegated run should have a single narrow objective and a clear scope.",
+                  "Good delegation rounds include: identifying candidate items, extracting evidence, preparing tool inputs, executing one focused tool-heavy step, or summarizing a bounded set of findings.",
+                  "Do not delegate an entire complex task unless there is a strong reason. After each delegated result, reassess the situation yourself and decide the next step.",
+                  "Keep core reasoning, global planning, trust assessment, de-duplication, and the final user-facing answer in the main model unless delegation is clearly inappropriate.",
                   "Treat delegation as an internal mechanism. Do not mention that you delegated work, do not describe the orchestration process, and do not dump raw structured results to the user unless they explicitly ask for them.",
                   "After a delegated subtask returns, absorb the result and continue with a concise, normal user-facing answer.",
-                  "When delegating, provide a precise task, a clear goal, and explicit success criteria.",
+                  "When delegating, define the exact goal of this round, explicit success criteria, clear task boundaries, and the required structured return format.",
                 ].join("\n")
               : undefined;
           const combinedExtraSystemPrompt = [params.extraSystemPrompt, orchestrationPrompt]
