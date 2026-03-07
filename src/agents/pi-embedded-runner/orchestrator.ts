@@ -52,6 +52,12 @@ type OrchestratorDeps = {
   runEmbedded?: RunEmbeddedPiAgentFn;
 };
 
+type PayloadLike = {
+  text?: string;
+  mediaUrl?: string;
+  mediaUrls?: string[];
+};
+
 function createEphemeralId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
 }
@@ -112,7 +118,7 @@ function buildToolModelPrompt(args: DelegateToToolModelArgs): string {
   ].join("\n");
 }
 
-function collectPayloadText(payloads: Array<{ text?: string }> | undefined): string | undefined {
+function collectPayloadText(payloads: PayloadLike[] | undefined): string | undefined {
   if (!payloads || payloads.length === 0) {
     return undefined;
   }
@@ -123,6 +129,55 @@ function collectPayloadText(payloads: Array<{ text?: string }> | undefined): str
     }
   }
   return undefined;
+}
+
+function collectStructuredTextFromOpenAIStyleResult(result: unknown): string | undefined {
+  if (!result || typeof result !== "object") {
+    return undefined;
+  }
+  const record = result as Record<string, unknown>;
+
+  const output = record.output;
+  if (!Array.isArray(output)) {
+    return undefined;
+  }
+
+  const parts: string[] = [];
+  for (const item of output) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const itemRecord = item as Record<string, unknown>;
+    const content = itemRecord.content;
+    if (!Array.isArray(content)) {
+      continue;
+    }
+    for (const block of content) {
+      if (!block || typeof block !== "object") {
+        continue;
+      }
+      const blockRecord = block as Record<string, unknown>;
+      if (blockRecord.type === "output_text" && typeof blockRecord.text === "string") {
+        parts.push(blockRecord.text);
+      }
+      if (blockRecord.type === "text" && typeof blockRecord.text === "string") {
+        parts.push(blockRecord.text);
+      }
+    }
+  }
+
+  const joined = parts.join("\n").trim();
+  return joined || undefined;
+}
+
+function collectStructuredOutputText(params: {
+  payloads: PayloadLike[] | undefined;
+  nestedResult: unknown;
+}): string | undefined {
+  return (
+    collectPayloadText(params.payloads) ??
+    collectStructuredTextFromOpenAIStyleResult(params.nestedResult)
+  );
 }
 
 function resolveToolModelRef(config?: OpenClawConfig): { provider: string; model: string } | null {
@@ -203,7 +258,10 @@ export async function runToolModelOrchestrator(
       };
     }
 
-    const rawText = collectPayloadText(nestedResult.payloads);
+    const rawText = collectStructuredOutputText({
+      payloads: nestedResult.payloads,
+      nestedResult,
+    });
     if (!rawText) {
       return {
         ok: false,
