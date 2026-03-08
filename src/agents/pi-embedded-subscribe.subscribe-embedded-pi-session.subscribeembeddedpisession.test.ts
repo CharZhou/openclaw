@@ -419,6 +419,80 @@ describe("subscribeEmbeddedPiSession", () => {
     expect(subscription.getLastToolError()?.toolName).toBe("session_status");
   });
 
+  it("buffers assistant stream in orch mode and suppresses raw orch_delegate from visible agent events", () => {
+    const { session, emit } = createStubSessionHarness();
+    const onAgentEvent = vi.fn();
+
+    subscribeEmbeddedPiSession({
+      session,
+      runId: "run-orch-delegate",
+      onAgentEvent,
+      bufferAssistantTextUntilMessageEnd: true,
+    });
+
+    emit({ type: "message_start", message: { role: "assistant" } });
+    emit({
+      type: "message_update",
+      message: { role: "assistant" },
+      assistantMessageEvent: { type: "text_delta", delta: '{"type":"orch_delegate"' },
+    });
+    emit({
+      type: "message_update",
+      message: { role: "assistant" },
+      assistantMessageEvent: { type: "text_delta", delta: ',"objective":"extract install steps"}' },
+    });
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: '{"type":"orch_delegate","objective":"extract install steps"}',
+          },
+        ],
+      },
+    });
+
+    expect(onAgentEvent).not.toHaveBeenCalled();
+  });
+
+  it("still emits normal assistant text at message_end when orch buffering is enabled", () => {
+    const { session, emit } = createStubSessionHarness();
+    const onAgentEvent = vi.fn();
+
+    subscribeEmbeddedPiSession({
+      session,
+      runId: "run-orch-normal",
+      onAgentEvent,
+      bufferAssistantTextUntilMessageEnd: true,
+    });
+
+    emit({ type: "message_start", message: { role: "assistant" } });
+    emit({
+      type: "message_update",
+      message: { role: "assistant" },
+      assistantMessageEvent: { type: "text_delta", delta: "Hello" },
+    });
+    emit({
+      type: "message_update",
+      message: { role: "assistant" },
+      assistantMessageEvent: { type: "text_delta", delta: " world" },
+    });
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "Hello world" }],
+      },
+    });
+
+    const payloads = extractAgentEventPayloads(onAgentEvent.mock.calls);
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0]?.text).toBe("Hello world");
+    expect(payloads[0]?.delta).toBe("Hello world");
+  });
+
   it("emits lifecycle:error event on agent_end when last assistant message was an error", async () => {
     const { emit, onAgentEvent } = createAgentEventHarness({
       runId: "run-error",

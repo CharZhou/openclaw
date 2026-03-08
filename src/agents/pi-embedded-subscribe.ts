@@ -46,6 +46,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     includeReasoning: reasoningMode === "on",
     shouldEmitPartialReplies: !(reasoningMode === "on" && !params.onBlockReply),
     streamReasoning: reasoningMode === "stream" && typeof params.onReasoningStream === "function",
+    bufferAssistantTextUntilMessageEnd: params.bufferAssistantTextUntilMessageEnd ?? false,
     deltaBuffer: "",
     blockBuffer: "",
     // Track if a streamed chunk opened a <think> block (stateful across chunks).
@@ -540,6 +541,30 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     }
   };
 
+  const emitAssistantStreamEvent = (args: {
+    text: string;
+    delta: string;
+    mediaUrls?: string[];
+  }) => {
+    emitAgentEvent({
+      runId: params.runId,
+      stream: "assistant",
+      data: {
+        text: args.text,
+        delta: args.delta,
+        mediaUrls: args.mediaUrls,
+      },
+    });
+    void params.onAgentEvent?.({
+      stream: "assistant",
+      data: {
+        text: args.text,
+        delta: args.delta,
+        mediaUrls: args.mediaUrls,
+      },
+    });
+  };
+
   const emitReasoningStream = (text: string) => {
     if (!state.streamReasoning || !params.onReasoningStream) {
       return;
@@ -611,6 +636,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     emitBlockChunk,
     flushBlockReplyBuffer,
     emitReasoningStream,
+    emitAssistantStreamEvent,
     consumeReplyDirectives,
     consumePartialReplyDirectives,
     resetAssistantMessageState,

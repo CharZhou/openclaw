@@ -42,6 +42,7 @@ export type EmbeddedPiSubscribeState = {
   includeReasoning: boolean;
   shouldEmitPartialReplies: boolean;
   streamReasoning: boolean;
+  bufferAssistantTextUntilMessageEnd: boolean;
 
   deltaBuffer: string;
   blockBuffer: string;
@@ -99,6 +100,7 @@ export type EmbeddedPiSubscribeContext = {
   emitBlockChunk: (text: string) => void;
   flushBlockReplyBuffer: () => void;
   emitReasoningStream: (text: string) => void;
+  emitAssistantStreamEvent: (args: { text: string; delta: string; mediaUrls?: string[] }) => void;
   consumeReplyDirectives: (
     text: string,
     options?: { final?: boolean },

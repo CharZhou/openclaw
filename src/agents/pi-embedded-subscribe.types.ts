@@ -35,6 +35,11 @@ export type SubscribeEmbeddedPiSessionParams = {
   sessionId?: string;
   /** Agent identity for hook context — resolved from session config in attempt.ts. */
   agentId?: string;
+  /**
+   * When true, assistant text is buffered until message_end so internal raw actions
+   * (for example orch_delegate JSON) can be classified before any user-visible stream emit.
+   */
+  bufferAssistantTextUntilMessageEnd?: boolean;
 };
 
 export type { BlockReplyChunking } from "./pi-embedded-block-chunker.js";

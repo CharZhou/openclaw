@@ -1,12 +1,12 @@
 import type { AgentEvent, AgentMessage } from "@mariozechner/pi-agent-core";
 import { parseReplyDirectives } from "../auto-reply/reply/reply-directives.js";
 import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
-import { emitAgentEvent } from "../infra/agent-events.js";
 import { createInlineCodeState } from "../markdown/code-spans.js";
 import {
   isMessagingToolDuplicateNormalized,
   normalizeTextForComparison,
 } from "./pi-embedded-helpers.js";
+import { parseInternalOrchAction } from "./pi-embedded-runner/internal-orch-action.js";
 import type { EmbeddedPiSubscribeContext } from "./pi-embedded-subscribe.handlers.types.js";
 import { appendRawStream } from "./pi-embedded-subscribe.raw-stream.js";
 import {
@@ -39,6 +39,16 @@ function emitReasoningEnd(ctx: EmbeddedPiSubscribeContext) {
   }
   ctx.state.reasoningStreamOpen = false;
   void ctx.params.onReasoningEnd?.();
+}
+
+function shouldSuppressAssistantTextForInternalOrch(
+  ctx: EmbeddedPiSubscribeContext,
+  text: string,
+): boolean {
+  if (!ctx.state.bufferAssistantTextUntilMessageEnd) {
+    return false;
+  }
+  return parseInternalOrchAction(text) !== null;
 }
 
 export function resolveSilentReplyFallbackText(params: {
@@ -212,23 +222,11 @@ export function handleMessageUpdate(
     ctx.state.lastStreamedAssistant = next;
     ctx.state.lastStreamedAssistantCleaned = cleanedText;
 
-    if (shouldEmit) {
-      emitAgentEvent({
-        runId: ctx.params.runId,
-        stream: "assistant",
-        data: {
-          text: cleanedText,
-          delta: deltaText,
-          mediaUrls: hasMedia ? mediaUrls : undefined,
-        },
-      });
-      void ctx.params.onAgentEvent?.({
-        stream: "assistant",
-        data: {
-          text: cleanedText,
-          delta: deltaText,
-          mediaUrls: hasMedia ? mediaUrls : undefined,
-        },
+    if (shouldEmit && !ctx.state.bufferAssistantTextUntilMessageEnd) {
+      ctx.emitAssistantStreamEvent({
+        text: cleanedText,
+        delta: deltaText,
+        mediaUrls: hasMedia ? mediaUrls : undefined,
       });
       ctx.state.emittedAssistantUpdate = true;
       if (ctx.params.onPartialReply && ctx.state.shouldEmitPartialReplies) {
@@ -300,23 +298,20 @@ export function handleMessageEnd(
     }
   }
 
-  if (!ctx.state.emittedAssistantUpdate && (cleanedText || hasMedia)) {
-    emitAgentEvent({
-      runId: ctx.params.runId,
-      stream: "assistant",
-      data: {
-        text: cleanedText,
-        delta: cleanedText,
-        mediaUrls: hasMedia ? mediaUrls : undefined,
-      },
-    });
-    void ctx.params.onAgentEvent?.({
-      stream: "assistant",
-      data: {
-        text: cleanedText,
-        delta: cleanedText,
-        mediaUrls: hasMedia ? mediaUrls : undefined,
-      },
+  const shouldSuppressAssistantStream = shouldSuppressAssistantTextForInternalOrch(
+    ctx,
+    cleanedText,
+  );
+
+  if (
+    !shouldSuppressAssistantStream &&
+    !ctx.state.emittedAssistantUpdate &&
+    (cleanedText || hasMedia)
+  ) {
+    ctx.emitAssistantStreamEvent({
+      text: cleanedText,
+      delta: cleanedText,
+      mediaUrls: hasMedia ? mediaUrls : undefined,
     });
     ctx.state.emittedAssistantUpdate = true;
   }
@@ -418,7 +413,8 @@ export function handleMessageEnd(
   ctx.state.blockState.thinking = false;
   ctx.state.blockState.final = false;
   ctx.state.blockState.inlineCode = createInlineCodeState();
-  ctx.state.lastStreamedAssistant = undefined;
-  ctx.state.lastStreamedAssistantCleaned = undefined;
-  ctx.state.reasoningStreamOpen = false;
+  ctx.state.partialBlockState.thinking = false;
+  ctx.state.partialBlockState.final = false;
+  ctx.state.partialBlockState.inlineCode = createInlineCodeState();
+  emitReasoningEnd(ctx);
 }

@@ -64,6 +64,13 @@ import {
 import type { EmbeddedPiAgentMeta, EmbeddedPiRunResult } from "./types.js";
 import { describeUnknownError } from "./utils.js";
 
+export function buildDelegatedPayloadText(result: unknown): string {
+  if (typeof result === "string") {
+    return result;
+  }
+  return JSON.stringify(result);
+}
+
 type ApiKeyInfo = ResolvedProviderAuth;
 
 type CopilotTokenState = {
@@ -1330,7 +1337,7 @@ export async function runEmbeddedPiAgent(
               return {
                 payloads: [
                   {
-                    text: JSON.stringify(delegated.result),
+                    text: buildDelegatedPayloadText(delegated.result),
                   },
                 ],
                 meta: {
