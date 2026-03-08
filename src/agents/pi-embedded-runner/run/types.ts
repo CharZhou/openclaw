@@ -6,6 +6,7 @@ import type { SessionSystemPromptReport } from "../../../config/sessions/types.j
 import type { PluginHookBeforeAgentStartResult } from "../../../plugins/types.js";
 import type { MessagingToolSend } from "../../pi-embedded-messaging.js";
 import type { NormalizedUsage } from "../../usage.js";
+import type { ToolModelOrchestratorResult } from "../orchestrator.js";
 import type { RunEmbeddedPiAgentParams } from "./params.js";
 
 type EmbeddedRunAttemptBase = Omit<
@@ -54,4 +55,6 @@ export type EmbeddedRunAttemptResult = {
   compactionCount?: number;
   /** Client tool call detected (OpenResponses hosted tools). */
   clientToolCall?: { name: string; params: Record<string, unknown> };
+  /** Internal orch delegation consumed at runtime before user-facing payload building. */
+  internalOrchDelegation?: ToolModelOrchestratorResult;
 };

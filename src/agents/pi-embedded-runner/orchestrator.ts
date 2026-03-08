@@ -63,7 +63,7 @@ function createEphemeralId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
 }
 
-function extractJsonPayloadCandidates(text: string): string[] {
+export function extractJsonPayloadCandidates(text: string): string[] {
   const trimmed = text.trim();
   if (!trimmed) {
     return [];

@@ -96,8 +96,13 @@ import {
   sanitizeToolsForGoogle,
 } from "../google.js";
 import { getDmHistoryLimitFromSessionKey, limitHistoryTurns } from "../history.js";
+import {
+  buildDelegateArgsFromInternalAction,
+  parseInternalOrchAction,
+} from "../internal-orch-action.js";
 import { log } from "../logger.js";
 import { buildModelAliasLines } from "../model.js";
+import { runToolModelOrchestrator } from "../orchestrator.js";
 import {
   clearActiveEmbeddedRun,
   type EmbeddedPiQueueHandle,
@@ -1794,6 +1799,29 @@ export async function runEmbeddedAttempt(
         .toReversed()
         .find((m) => m.role === "assistant");
 
+      let internalOrchDelegation: EmbeddedRunAttemptResult["internalOrchDelegation"];
+      if (
+        params.config?.orchestration?.enabled === true &&
+        !params.disableOrchestrationDelegateTool &&
+        !params.structuredOutput
+      ) {
+        const internalAction = parseInternalOrchAction(attempt.assistantTexts.join("\n\n"));
+        if (internalAction) {
+          internalOrchDelegation = await runToolModelOrchestrator({
+            args: buildDelegateArgsFromInternalAction(internalAction),
+            config: params.config,
+            sessionKey: params.sessionKey,
+            workspaceDir: params.workspaceDir,
+            agentDir: params.agentDir,
+            messageChannel: params.messageChannel,
+            messageProvider: params.messageProvider,
+            agentAccountId: params.agentAccountId,
+            runId: params.runId,
+            timeoutMs: params.timeoutMs,
+          });
+        }
+      }
+
       const toolMetasNormalized = toolMetas
         .filter(
           (entry): entry is { toolName: string; meta?: string } =>
@@ -1852,6 +1880,7 @@ export async function runEmbeddedAttempt(
         compactionCount: getCompactionCount(),
         // Client tool call detected (OpenResponses hosted tools)
         clientToolCall: clientToolCallDetected ?? undefined,
+        internalOrchDelegation,
       };
     } finally {
       // Always tear down the session (and release the lock) before we leave this attempt.

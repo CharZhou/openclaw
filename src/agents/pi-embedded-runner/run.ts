@@ -764,7 +764,9 @@ export async function runEmbeddedPiAgent(
             !params.disableOrchestrationDelegateTool
               ? [
                   "Orchestration mode is enabled.",
-                  "When a subtask is primarily tool-oriented, operational, or mechanical - such as preparing tool inputs, executing tool-heavy steps, or interpreting tool outputs - prefer using `delegate_to_tool_model` instead of directly using regular tools yourself.",
+                  "When a subtask is primarily tool-oriented, operational, or mechanical - such as preparing tool inputs, executing tool-heavy steps, or interpreting tool outputs - prefer using an internal `orch_delegate` JSON action instead of directly using regular tools yourself.",
+                  'Emit the internal action as raw JSON only when delegating, using the minimal shape: {"type":"orch_delegate","objective":"..."}.',
+                  "Use `delegate_to_tool_model` only as a fallback/debug path when internal delegation is unsuitable.",
                   "Prefer small, focused delegation rounds over one large delegation. Each delegated run should have a single narrow objective and a clear scope.",
                   "Good delegation rounds include: identifying candidate items, extracting evidence, preparing tool inputs, executing one focused tool-heavy step, or summarizing a bounded set of findings.",
                   "Do not delegate an entire complex task unless there is a strong reason. After each delegated result, reassess the situation yourself and decide the next step.",
@@ -1321,6 +1323,54 @@ export async function runEmbeddedPiAgent(
             promptTokens,
             compactionCount: autoCompactionCount > 0 ? autoCompactionCount : undefined,
           };
+
+          if (attempt.internalOrchDelegation) {
+            const delegated = attempt.internalOrchDelegation;
+            if (delegated.ok) {
+              return {
+                payloads: [
+                  {
+                    text: JSON.stringify(delegated.result),
+                  },
+                ],
+                meta: {
+                  durationMs: Date.now() - started,
+                  agentMeta,
+                  aborted,
+                  systemPromptReport: attempt.systemPromptReport,
+                },
+                didSendViaMessagingTool: attempt.didSendViaMessagingTool,
+                messagingToolSentTexts: attempt.messagingToolSentTexts,
+                messagingToolSentMediaUrls: attempt.messagingToolSentMediaUrls,
+                messagingToolSentTargets: attempt.messagingToolSentTargets,
+                successfulCronAdds: attempt.successfulCronAdds,
+              };
+            }
+
+            return {
+              payloads: [
+                {
+                  text: `Delegated task failed: ${delegated.error.message}`,
+                  isError: true,
+                },
+              ],
+              meta: {
+                durationMs: Date.now() - started,
+                agentMeta,
+                aborted,
+                systemPromptReport: attempt.systemPromptReport,
+                error: {
+                  kind: "retry_limit",
+                  message: delegated.error.message,
+                },
+              },
+              didSendViaMessagingTool: attempt.didSendViaMessagingTool,
+              messagingToolSentTexts: attempt.messagingToolSentTexts,
+              messagingToolSentMediaUrls: attempt.messagingToolSentMediaUrls,
+              messagingToolSentTargets: attempt.messagingToolSentTargets,
+              successfulCronAdds: attempt.successfulCronAdds,
+            };
+          }
 
           const payloads = buildEmbeddedRunPayloads({
             assistantTexts: attempt.assistantTexts,
