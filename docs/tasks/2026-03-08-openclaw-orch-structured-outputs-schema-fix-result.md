@@ -105,4 +105,13 @@ Coverage added/confirmed:
 
 ## Git
 
-To be filled after commit / push / merge.
+Implementation commit on `feat/orch-delegate-tool-model`:
+
+- `b844e1efe` - `Orchestrator: fix delegated structured output schema compatibility`
+- pushed to `origin/feat/orch-delegate-tool-model`
+
+Merge into `local`:
+
+- `local` had diverged history, so the branch could not be fast-forwarded
+- merged with `--no-ff` as `4331cb2c1`
+- pushed to `origin/local`
