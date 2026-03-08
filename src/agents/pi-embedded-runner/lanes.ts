@@ -13,3 +13,7 @@ export function resolveGlobalLane(lane?: string) {
 export function resolveEmbeddedSessionLane(key: string) {
   return resolveSessionLane(key);
 }
+
+export function resolveDelegateLane(role: string): string {
+  return `delegate:${role}`;
+}

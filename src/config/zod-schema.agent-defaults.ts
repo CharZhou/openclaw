@@ -180,6 +180,41 @@ export const AgentDefaultsSchema = z
       .strict()
       .optional(),
     sandbox: AgentSandboxSchema,
+    multiModel: z
+      .object({
+        enabled: z.boolean().optional(),
+        maxDelegatesPerTurn: z.number().int().positive().optional(),
+        delegateTimeoutSeconds: z.number().int().positive().optional(),
+        lane: z
+          .object({
+            maxConcurrent: z.number().int().positive().optional(),
+          })
+          .strict()
+          .optional(),
+        roles: z
+          .record(
+            z.string(),
+            z
+              .object({
+                model: z.string().optional(),
+                thinking: z
+                  .union([
+                    z.literal("off"),
+                    z.literal("low"),
+                    z.literal("medium"),
+                    z.literal("high"),
+                  ])
+                  .optional(),
+                tools: z.array(z.string()).optional(),
+                writable: z.boolean().optional(),
+                maxTurns: z.number().int().positive().optional(),
+              })
+              .strict(),
+          )
+          .optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .optional();

@@ -2,6 +2,7 @@ import type { OpenClawConfig } from "../config/config.js";
 import { resolvePluginTools } from "../plugins/tools.js";
 import type { GatewayMessageChannel } from "../utils/message-channel.js";
 import { resolveSessionAgentId } from "./agent-scope.js";
+import { resolveMultiModelConfig } from "./multi-model/role-registry.js";
 import type { SandboxFsBridge } from "./sandbox/fs-bridge.js";
 import type { ToolFsPolicy } from "./tool-fs-policy.js";
 import { createAgentsListTool } from "./tools/agents-list-tool.js";
@@ -9,6 +10,7 @@ import { createBrowserTool } from "./tools/browser-tool.js";
 import { createCanvasTool } from "./tools/canvas-tool.js";
 import type { AnyAgentTool } from "./tools/common.js";
 import { createCronTool } from "./tools/cron-tool.js";
+import { createDelegateRunTool } from "./tools/delegate-run-tool.js";
 import { createGatewayTool } from "./tools/gateway-tool.js";
 import { createImageTool } from "./tools/image-tool.js";
 import { createMessageTool } from "./tools/message-tool.js";
@@ -101,6 +103,23 @@ export function createOpenClawTools(options?: {
         fsPolicy: options?.fsPolicy,
       })
     : null;
+
+  // Multi-model delegation tool
+  const multiModelConfig = resolveMultiModelConfig(options?.config);
+  const delegateRunTool =
+    multiModelConfig.enabled && options?.agentSessionKey && options?.agentDir
+      ? createDelegateRunTool({
+          config: options?.config,
+          sessionKey: options.agentSessionKey,
+          workspaceDir,
+          agentDir: options.agentDir,
+          messageChannel: options?.agentChannel,
+          messageProvider: options?.agentChannel ?? undefined,
+          agentAccountId: options?.agentAccountId,
+          runId: options?.sessionId,
+        })
+      : null;
+
   const webSearchTool = createWebSearchTool({
     config: options?.config,
     sandboxed: options?.sandboxed,
@@ -193,6 +212,7 @@ export function createOpenClawTools(options?: {
     ...(webFetchTool ? [webFetchTool] : []),
     ...(imageTool ? [imageTool] : []),
     ...(pdfTool ? [pdfTool] : []),
+    ...(delegateRunTool ? [delegateRunTool] : []),
   ];
 
   const pluginTools = resolvePluginTools({

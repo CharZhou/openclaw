@@ -1,6 +1,7 @@
 import { createHmac, createHash } from "node:crypto";
 import type { ReasoningLevel, ThinkLevel } from "../auto-reply/thinking.js";
 import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
+import type { OpenClawConfig } from "../config/config.js";
 import type { MemoryCitationsMode } from "../config/types.memory.js";
 import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 import type { ResolvedTimeFormat } from "./date-time.js";
@@ -60,6 +61,50 @@ function buildMemorySection(params: {
   }
   lines.push("");
   return lines;
+}
+
+function buildMultiModelDelegationSection(params: {
+  isMinimal: boolean;
+  availableTools: Set<string>;
+  config?: OpenClawConfig;
+}) {
+  if (params.isMinimal) {
+    return [];
+  }
+  if (!params.availableTools.has("delegate_run")) {
+    return [];
+  }
+
+  // Check if multiModel is enabled
+  const multiModelConfig = (params.config?.agents?.defaults as Record<string, unknown>)
+    ?.multiModel as { enabled?: boolean } | undefined;
+  if (!multiModelConfig?.enabled) {
+    return [];
+  }
+
+  return [
+    "## Multi-Model Delegation",
+    "",
+    "You have access to `delegate_run` for delegating sub-tasks to specialized worker models.",
+    "",
+    "**When to delegate:**",
+    "- Research/scanning tasks that benefit from a fast model",
+    "- Complex planning that needs deep reasoning",
+    "- Code implementation that should be isolated",
+    "- Code review that needs thorough analysis",
+    "",
+    "**When NOT to delegate:**",
+    "- Simple questions you can answer directly",
+    "- Tasks that need your full conversation context",
+    "- Single-step operations",
+    "",
+    "**Rules:**",
+    "- Each delegate runs in an isolated session with NO access to your conversation history",
+    "- You must include all necessary context in the task description",
+    "- Delegates return summaries, not raw outputs",
+    "- You are responsible for the final answer to the user",
+    "",
+  ];
 }
 
 function buildUserIdentitySection(ownerLine: string | undefined, isMinimal: boolean) {
@@ -232,6 +277,7 @@ export function buildAgentSystemPrompt(params: {
     channel: string;
   };
   memoryCitationsMode?: MemoryCitationsMode;
+  config?: OpenClawConfig;
 }) {
   const acpEnabled = params.acpEnabled !== false;
   const sandboxedRuntime = params.sandboxInfo?.enabled === true;
@@ -406,6 +452,11 @@ export function buildAgentSystemPrompt(params: {
     availableTools,
     citationsMode: params.memoryCitationsMode,
   });
+  const delegationSection = buildMultiModelDelegationSection({
+    isMinimal,
+    availableTools,
+    config: params.config,
+  });
   const docsSection = buildDocsSection({
     docsPath: params.docsPath,
     isMinimal,
@@ -476,6 +527,7 @@ export function buildAgentSystemPrompt(params: {
     "",
     ...skillsSection,
     ...memorySection,
+    ...delegationSection,
     // Skip self-update for subagent/none modes
     hasGateway && !isMinimal ? "## OpenClaw Self-Update" : "",
     hasGateway && !isMinimal

@@ -284,6 +284,25 @@ export type AgentDefaultsConfig = {
   };
   /** Optional sandbox settings for non-main sessions. */
   sandbox?: AgentSandboxConfig;
+  /** Multi-model orchestration configuration. */
+  multiModel?: {
+    enabled?: boolean;
+    maxDelegatesPerTurn?: number;
+    delegateTimeoutSeconds?: number;
+    lane?: {
+      maxConcurrent?: number;
+    };
+    roles?: Record<
+      string,
+      {
+        model?: string;
+        thinking?: "off" | "low" | "medium" | "high";
+        tools?: string[];
+        writable?: boolean;
+        maxTurns?: number;
+      }
+    >;
+  };
 };
 
 export type AgentCompactionMode = "default" | "safeguard";
