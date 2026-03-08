@@ -1805,7 +1805,7 @@ export async function runEmbeddedAttempt(
         !params.disableOrchestrationDelegateTool &&
         !params.structuredOutput
       ) {
-        const internalAction = parseInternalOrchAction(attempt.assistantTexts.join("\n\n"));
+        const internalAction = parseInternalOrchAction(assistantTexts.join("\n\n"));
         if (internalAction) {
           internalOrchDelegation = await runToolModelOrchestrator({
             args: buildDelegateArgsFromInternalAction(internalAction),
