@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { runToolModelOrchestrator } from "./orchestrator.js";
+import { ORCH_DELEGATED_STRUCTURED_OUTPUT_REQUEST } from "./structured-output.js";
 
 const BASE_ARGS = {
   task: "Summarize telemetry and compute key deltas",
@@ -34,6 +35,10 @@ describe("runToolModelOrchestrator", () => {
     );
 
     expect(runEmbedded).toHaveBeenCalledTimes(1);
+    expect(runEmbedded.mock.calls[0]?.[0]).toMatchObject({
+      structuredOutput: ORCH_DELEGATED_STRUCTURED_OUTPUT_REQUEST,
+      disableOrchestrationDelegateTool: true,
+    });
     expect(result).toEqual({
       ok: true,
       summary: "done",

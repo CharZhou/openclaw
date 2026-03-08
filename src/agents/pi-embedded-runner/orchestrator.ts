@@ -6,6 +6,7 @@ import type { OpenClawConfig } from "../../config/config.js";
 import { DEFAULT_PROVIDER } from "../defaults.js";
 import { parseModelRef } from "../model-selection.js";
 import { runEmbeddedPiAgent } from "./run.js";
+import { ORCH_DELEGATED_STRUCTURED_OUTPUT_REQUEST } from "./structured-output.js";
 
 const STRUCTURED_JSON_FORMAT = "structured_json";
 const DEFAULT_TOOL_MODEL_TIMEOUT_MS = 60_000;
@@ -249,6 +250,7 @@ export async function runToolModelOrchestrator(
       disableMessageTool: true,
       requireExplicitMessageTarget: true,
       disableOrchestrationDelegateTool: true,
+      structuredOutput: ORCH_DELEGATED_STRUCTURED_OUTPUT_REQUEST,
     });
 
     if (nestedResult.meta.error) {

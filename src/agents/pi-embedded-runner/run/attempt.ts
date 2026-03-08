@@ -107,6 +107,7 @@ import { buildEmbeddedSandboxInfo } from "../sandbox-info.js";
 import { prewarmSessionFile, trackSessionManagerAccess } from "../session-manager-cache.js";
 import { prepareSessionManagerForRun } from "../session-manager-init.js";
 import { resolveEmbeddedRunSkillEntries } from "../skills-runtime.js";
+import { createStructuredOutputPayloadWrapper } from "../structured-output.js";
 import {
   applySystemPromptOverrideToSession,
   buildEmbeddedSystemPrompt,
@@ -1175,6 +1176,13 @@ export async function runEmbeddedAttempt(
         params.thinkLevel,
         sessionAgentId,
       );
+
+      if (params.structuredOutput) {
+        activeSession.agent.streamFn = createStructuredOutputPayloadWrapper(
+          activeSession.agent.streamFn,
+          params.structuredOutput,
+        );
+      }
 
       if (cacheTrace) {
         cacheTrace.recordStage("session:loaded", {
