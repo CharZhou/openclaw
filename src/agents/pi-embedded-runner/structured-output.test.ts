@@ -60,10 +60,10 @@ describe("injectStructuredOutputPayload", () => {
       effort: "low",
       format: {
         type: "json_schema",
-        name: "openclaw_orch_delegated_result",
         schema: ORCH_DELEGATED_STRUCTURED_OUTPUT_REQUEST.schema,
       },
     });
+    expect((payload.output_config as { format?: { name?: string } }).format?.name).toBeUndefined();
   });
 
   it("adds OpenAI Responses text.format while preserving existing payload fields", () => {

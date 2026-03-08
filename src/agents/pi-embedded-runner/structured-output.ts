@@ -44,8 +44,8 @@ export function supportsStructuredOutputApi(api: unknown): boolean {
 
 function buildAnthropicStructuredFormat(request: StructuredOutputRequest): Record<string, unknown> {
   return {
+    // Anthropic rejects delegated `output_config.format.name`, so only send the minimal schema payload.
     type: "json_schema",
-    name: request.name,
     schema: request.schema,
   };
 }
