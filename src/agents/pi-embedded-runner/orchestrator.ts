@@ -101,6 +101,35 @@ function parseStructuredJsonOutput(text: string): Record<string, unknown> | null
   return null;
 }
 
+function getTrimmedString(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
+function resolveStructuredResult(parsed: Record<string, unknown>): unknown {
+  const resultJson = parsed.result_json;
+  if (typeof resultJson === "string") {
+    try {
+      return JSON.parse(resultJson) as unknown;
+    } catch {
+      if (Object.hasOwn(parsed, "result")) {
+        return parsed.result;
+      }
+      return resultJson;
+    }
+  }
+
+  if (Object.hasOwn(parsed, "result")) {
+    return parsed.result;
+  }
+
+  return parsed;
+}
+
 function buildToolModelPrompt(args: DelegateToToolModelArgs): string {
   return [
     "You are a delegated tool-model worker for OpenClaw orchestration.",
@@ -113,7 +142,9 @@ function buildToolModelPrompt(args: DelegateToToolModelArgs): string {
     "Do not narrate what you are about to do. Just do it and return the final JSON object.",
     "",
     "Required JSON shape:",
-    '{ "summary": "string", "result": {} }',
+    '{ "ok": true, "summary": "string", "result_json": "{\\"key\\":\\"value\\"}", "error_message": "" }',
+    "Use ok=false when the delegated task fails and put the failure detail in error_message.",
+    "result_json must be a valid JSON-encoded string. Do not place a raw object in result_json.",
     "",
     `Task: ${args.task}`,
     `Goal: ${args.goal}`,
@@ -289,11 +320,23 @@ export async function runToolModelOrchestrator(
       };
     }
 
+    const isStructuredFailure = parsed.ok === false;
     const summary =
-      typeof parsed.summary === "string" && parsed.summary.trim()
-        ? parsed.summary.trim()
-        : "Delegated task completed.";
-    const result = Object.hasOwn(parsed, "result") ? parsed.result : parsed;
+      getTrimmedString(parsed, "summary") ??
+      (isStructuredFailure ? "Delegated task failed." : "Delegated task completed.");
+
+    if (isStructuredFailure) {
+      return {
+        ok: false,
+        summary,
+        error: {
+          message:
+            getTrimmedString(parsed, "error_message") ?? "Delegated tool model reported failure.",
+        },
+      };
+    }
+
+    const result = resolveStructuredResult(parsed);
 
     return {
       ok: true,

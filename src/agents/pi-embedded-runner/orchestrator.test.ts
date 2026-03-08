@@ -6,15 +6,15 @@ const BASE_ARGS = {
   task: "Summarize telemetry and compute key deltas",
   goal: "Return machine-readable summary",
   return_format: "structured_json" as const,
-  success_criteria: "Includes summary and result object",
+  success_criteria: "Includes summary and a JSON-encoded result payload",
 };
 
 describe("runToolModelOrchestrator", () => {
-  it("normalizes successful structured_json output", async () => {
+  it("parses result_json from the structured output envelope", async () => {
     const runEmbedded = vi.fn(async () => ({
       payloads: [
         {
-          text: '{"summary":"done","result":{"delta":42}}',
+          text: '{"ok":true,"summary":"done","result_json":"{\\"delta\\":42}","error_message":""}',
         },
       ],
       meta: { durationMs: 12 },
@@ -43,6 +43,101 @@ describe("runToolModelOrchestrator", () => {
       ok: true,
       summary: "done",
       result: { delta: 42 },
+    });
+  });
+
+  it("preserves the legacy result-object fallback", async () => {
+    const runEmbedded = vi.fn(async () => ({
+      payloads: [
+        {
+          text: '{"summary":"done","result":{"delta":42}}',
+        },
+      ],
+      meta: { durationMs: 12 },
+    }));
+
+    const result = await runToolModelOrchestrator(
+      {
+        args: BASE_ARGS,
+        config: {
+          orchestration: {
+            enabled: true,
+            toolModel: "anthropic/claude-3-5-haiku",
+          },
+        },
+        workspaceDir: process.cwd(),
+      },
+      { runEmbedded },
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      summary: "done",
+      result: { delta: 42 },
+    });
+  });
+
+  it("returns a structured failure when the envelope reports ok=false", async () => {
+    const runEmbedded = vi.fn(async () => ({
+      payloads: [
+        {
+          text: '{"ok":false,"summary":"delegate failed","result_json":"null","error_message":"rate limited"}',
+        },
+      ],
+      meta: { durationMs: 11 },
+    }));
+
+    const result = await runToolModelOrchestrator(
+      {
+        args: BASE_ARGS,
+        config: {
+          orchestration: {
+            enabled: true,
+            toolModel: "anthropic/claude-3-5-haiku",
+          },
+        },
+        workspaceDir: process.cwd(),
+      },
+      { runEmbedded },
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      summary: "delegate failed",
+      error: {
+        message: "rate limited",
+      },
+    });
+  });
+
+  it("keeps the raw result_json string when the inner JSON parse fails", async () => {
+    const runEmbedded = vi.fn(async () => ({
+      payloads: [
+        {
+          text: '{"ok":true,"summary":"done","result_json":"{bad-json","error_message":""}',
+        },
+      ],
+      meta: { durationMs: 12 },
+    }));
+
+    const result = await runToolModelOrchestrator(
+      {
+        args: BASE_ARGS,
+        config: {
+          orchestration: {
+            enabled: true,
+            toolModel: "anthropic/claude-3-5-haiku",
+          },
+        },
+        workspaceDir: process.cwd(),
+      },
+      { runEmbedded },
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      summary: "done",
+      result: "{bad-json",
     });
   });
 

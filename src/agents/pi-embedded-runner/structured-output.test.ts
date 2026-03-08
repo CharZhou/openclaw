@@ -7,7 +7,43 @@ import {
   ORCH_DELEGATED_STRUCTURED_OUTPUT_REQUEST,
 } from "./structured-output.js";
 
+function findAdditionalPropertiesTrue(schema: unknown, path = "root"): string[] {
+  if (!schema || typeof schema !== "object") {
+    return [];
+  }
+  if (Array.isArray(schema)) {
+    return schema.flatMap((item, index) => findAdditionalPropertiesTrue(item, `${path}[${index}]`));
+  }
+
+  const record = schema as Record<string, unknown>;
+  const matches = record.additionalProperties === true ? [path] : [];
+
+  return [
+    ...matches,
+    ...Object.entries(record).flatMap(([key, value]) =>
+      findAdditionalPropertiesTrue(value, `${path}.${key}`),
+    ),
+  ];
+}
+
 describe("injectStructuredOutputPayload", () => {
+  it("uses a closed envelope schema without additionalProperties=true", () => {
+    expect(ORCH_DELEGATED_STRUCTURED_OUTPUT_REQUEST.schema).toEqual({
+      type: "object",
+      properties: {
+        ok: { type: "boolean" },
+        summary: { type: "string" },
+        result_json: { type: "string" },
+        error_message: { type: "string" },
+      },
+      required: ["ok", "summary", "result_json", "error_message"],
+      additionalProperties: false,
+    });
+    expect(findAdditionalPropertiesTrue(ORCH_DELEGATED_STRUCTURED_OUTPUT_REQUEST.schema)).toEqual(
+      [],
+    );
+  });
+
   it("merges Anthropic output_config.format without clobbering existing output_config", () => {
     const payload: Record<string, unknown> = {
       output_config: { effort: "low" },

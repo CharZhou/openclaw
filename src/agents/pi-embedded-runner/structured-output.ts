@@ -12,13 +12,12 @@ const ORCH_DELEGATED_STRUCTURED_OUTPUT_SCHEMA_NAME = "openclaw_orch_delegated_re
 const ORCH_DELEGATED_STRUCTURED_OUTPUT_SCHEMA = {
   type: "object",
   properties: {
+    ok: { type: "boolean" },
     summary: { type: "string" },
-    result: {
-      type: "object",
-      additionalProperties: true,
-    },
+    result_json: { type: "string" },
+    error_message: { type: "string" },
   },
-  required: ["summary", "result"],
+  required: ["ok", "summary", "result_json", "error_message"],
   additionalProperties: false,
 } satisfies Record<string, unknown>;
 
