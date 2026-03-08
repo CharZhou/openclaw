@@ -7,35 +7,35 @@ const DEFAULT_ROLES: Record<DelegateRole, RoleConfig> = {
     thinking: "low",
     tools: ["read", "exec", "browser", "web_search", "web_fetch"],
     writable: false,
-    maxTurns: 3,
+    maxTurns: 8,
   },
   plan: {
     model: "deep",
     thinking: "high",
     tools: ["read", "exec"],
     writable: false,
-    maxTurns: 3,
+    maxTurns: 5,
   },
   implement: {
     model: "main",
     thinking: "medium",
     tools: ["read", "edit", "write", "exec"],
     writable: true,
-    maxTurns: 6,
+    maxTurns: 10,
   },
   review: {
     model: "deep",
     thinking: "high",
     tools: ["read", "exec"],
     writable: false,
-    maxTurns: 4,
+    maxTurns: 6,
   },
 };
 
 const DEFAULT_MULTI_MODEL: MultiModelConfig = {
   enabled: false,
   maxDelegatesPerTurn: 3,
-  delegateTimeoutSeconds: 180,
+  delegateTimeoutSeconds: 600,
   lane: { maxConcurrent: 4 },
   roles: DEFAULT_ROLES,
 };

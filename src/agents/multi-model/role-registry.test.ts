@@ -7,7 +7,7 @@ describe("resolveMultiModelConfig", () => {
     const result = resolveMultiModelConfig();
     expect(result.enabled).toBe(false);
     expect(result.maxDelegatesPerTurn).toBe(3);
-    expect(result.delegateTimeoutSeconds).toBe(180);
+    expect(result.delegateTimeoutSeconds).toBe(600);
     expect(result.lane.maxConcurrent).toBe(4);
     expect(Object.keys(result.roles)).toEqual(["research", "plan", "implement", "review"]);
   });
@@ -36,7 +36,7 @@ describe("resolveMultiModelConfig", () => {
     const result = resolveMultiModelConfig(cfg);
     expect(result.enabled).toBe(true);
     expect(result.maxDelegatesPerTurn).toBe(5);
-    expect(result.delegateTimeoutSeconds).toBe(180); // still default
+    expect(result.delegateTimeoutSeconds).toBe(600); // still default
     expect(result.roles.research.model).toBe("custom/model");
     expect(result.roles.research.thinking).toBe("low"); // default preserved
     expect(result.roles.plan.model).toBe("deep"); // untouched role preserved

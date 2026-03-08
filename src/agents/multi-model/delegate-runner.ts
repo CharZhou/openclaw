@@ -1,12 +1,18 @@
+import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
+import { promisify } from "node:util";
 import type { OpenClawConfig } from "../../config/config.js";
+import { logInfo } from "../../logger.js";
 import { runEmbeddedPiAgent } from "../pi-embedded-runner/run.js";
 import { resolveModelAlias } from "./model-alias.js";
 import { resolveMultiModelConfig, resolveRoleConfig } from "./role-registry.js";
 import type { DelegateRole, DelegateRunInput, DelegateRunOutput } from "./types.js";
 
+const execFileAsync = promisify(execFile);
+
 const DELEGATE_LANE_PREFIX = "delegate";
+const TREE_MAX_CHARS = 4000;
 
 function createDelegateSessionKey(parentSessionKey: string, role: DelegateRole): string {
   const suffix = randomBytes(4).toString("hex");
@@ -18,9 +24,59 @@ function createDelegateSessionId(): string {
 }
 
 /**
+ * 生成 workspace 的简要文件树（深度 3，排除常见噪音目录）
+ */
+async function generateWorkspaceTree(workspaceDir: string): Promise<string> {
+  try {
+    // 优先用 find（跨平台比 tree 更可靠）
+    const { stdout } = await execFileAsync(
+      "find",
+      [
+        workspaceDir,
+        "-maxdepth",
+        "3",
+        "-not",
+        "-path",
+        "*/node_modules/*",
+        "-not",
+        "-path",
+        "*/.git/*",
+        "-not",
+        "-path",
+        "*/.next/*",
+        "-not",
+        "-path",
+        "*/dist/*",
+        "-not",
+        "-path",
+        "*/.openclaw/sessions/*",
+        "-not",
+        "-path",
+        "*/__pycache__/*",
+        "-not",
+        "-name",
+        "*.jsonl",
+        "-not",
+        "-name",
+        "*.log",
+      ],
+      { timeout: 5000, maxBuffer: 1024 * 256 },
+    );
+
+    const trimmed = stdout.trim();
+    if (trimmed.length > TREE_MAX_CHARS) {
+      return trimmed.slice(0, TREE_MAX_CHARS) + "\n... (truncated)";
+    }
+    return trimmed;
+  } catch {
+    return "(file tree unavailable)";
+  }
+}
+
+/**
  * 构建传给 child 的 system prompt 片段
  */
-function buildChildTaskPrompt(input: DelegateRunInput): string {
+function buildChildTaskPrompt(input: DelegateRunInput, opts?: { workspaceTree?: string }): string {
   const lines: string[] = [
     `# Delegated Task`,
     ``,
@@ -32,9 +88,29 @@ function buildChildTaskPrompt(input: DelegateRunInput): string {
     lines.push(``, `**Context:**`, input.context);
   }
 
+  if (opts?.workspaceTree) {
+    lines.push(
+      ``,
+      `## Workspace File Tree`,
+      ``,
+      `Below is a summary of key files/directories in the workspace. Use this to navigate efficiently instead of running broad \`find\` commands:`,
+      ``,
+      "```",
+      opts.workspaceTree,
+      "```",
+    );
+  }
+
   lines.push(
     ``,
     `---`,
+    ``,
+    `## Execution Strategy`,
+    ``,
+    `**IMPORTANT:** You have a limited time budget. Follow this strategy:`,
+    `1. Start with targeted reads/greps based on the file tree above — avoid broad \`find\` scans`,
+    `2. After gathering enough evidence (even if not exhaustive), produce your summary IMMEDIATELY`,
+    `3. Do NOT wait until you have "complete" data — partial but structured output is far better than being cut off mid-investigation`,
     ``,
     `## Output Requirements`,
     ``,
@@ -86,9 +162,6 @@ export async function executeDelegateRun(params: DelegateRunnerParams): Promise<
   const childSessionKey = createDelegateSessionKey(params.parentSessionKey, input.role);
   const childSessionId = createDelegateSessionId();
 
-  // 4. 构建 child prompt
-  const taskPrompt = buildChildTaskPrompt(input);
-
   // 5. 确定超时
   const timeoutMs =
     (input.timeoutSeconds ?? resolveMultiModelConfig(config).delegateTimeoutSeconds) * 1000;
@@ -105,6 +178,21 @@ export async function executeDelegateRun(params: DelegateRunnerParams): Promise<
   );
 
   try {
+    logInfo(
+      `multi-model:delegate: [delegate-run] role=${input.role} model=${modelRef.provider}/${modelRef.model} timeout=${timeoutMs}ms session=${childSessionId}`,
+    );
+
+    // 4. 生成 workspace tree
+    let workspaceTree: string | undefined;
+    try {
+      workspaceTree = await generateWorkspaceTree(params.workspaceDir);
+    } catch {
+      // 非关键，忽略
+    }
+
+    // 构建 child prompt
+    const taskPrompt = buildChildTaskPrompt(input, { workspaceTree });
+
     // 8. 同步执行 child
     const result = await runEmbeddedPiAgent({
       sessionId: childSessionId,
@@ -133,7 +221,7 @@ export async function executeDelegateRun(params: DelegateRunnerParams): Promise<
       result.payloads?.[0]?.text ?? result.meta.error?.message ?? "No output from delegate";
     const effectiveModel = `${modelRef.provider}/${modelRef.model}`;
 
-    return {
+    const output: DelegateRunOutput = {
       status: result.meta.error ? "error" : "ok",
       role: input.role,
       childSessionKey,
@@ -149,6 +237,12 @@ export async function executeDelegateRun(params: DelegateRunnerParams): Promise<
       error: result.meta.error?.message ?? undefined,
       durationMs: Date.now() - started,
     };
+
+    logInfo(
+      `multi-model:delegate: [delegate-run] role=${input.role} status=${result.meta.error ? "error" : "ok"} duration=${Date.now() - started}ms session=${childSessionId}`,
+    );
+
+    return output;
   } catch (err) {
     return {
       status: "error",
