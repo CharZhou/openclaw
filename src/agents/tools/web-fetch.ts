@@ -508,7 +508,7 @@ async function maybeFetchFirecrawlWebFetchPayload(
 
 async function runWebFetch(params: WebFetchRuntimeParams): Promise<Record<string, unknown>> {
   const cacheKey = normalizeCacheKey(
-    `fetch:${params.url}:${params.extractMode}:${params.maxChars}`,
+    `fetch:${params.url}:${params.extractMode}:${params.maxChars}:${JSON.stringify(params.ssrfPolicy ?? null)}`,
   );
   const cached = readCache(FETCH_CACHE, cacheKey);
   if (cached) {

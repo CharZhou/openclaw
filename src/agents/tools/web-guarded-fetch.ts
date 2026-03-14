@@ -20,7 +20,10 @@ type WebToolGuardedFetchOptions = Omit<
   useEnvProxy?: boolean;
   ssrfPolicy?: SsrFPolicy;
 };
-type WebToolEndpointFetchOptions = Omit<WebToolGuardedFetchOptions, "policy" | "useEnvProxy">;
+type WebToolEndpointFetchOptions = Omit<
+  WebToolGuardedFetchOptions,
+  "policy" | "useEnvProxy" | "ssrfPolicy"
+>;
 
 function resolveTimeoutMs(params: {
   timeoutMs?: number;
