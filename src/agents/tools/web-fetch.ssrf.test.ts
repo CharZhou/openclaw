@@ -5,6 +5,7 @@ import { makeFetchHeaders } from "./web-fetch.test-harness.js";
 
 const lookupMock = vi.fn();
 const resolvePinnedHostname = ssrf.resolvePinnedHostname;
+const resolvePinnedHostnameWithPolicy = ssrf.resolvePinnedHostnameWithPolicy;
 
 function redirectResponse(location: string): Response {
   return {
@@ -34,6 +35,7 @@ function setMockFetch(
 
 async function createWebFetchToolForTest(params?: {
   firecrawl?: { enabled?: boolean; apiKey?: string };
+  ssrfPolicy?: ssrf.SsrFPolicy;
 }) {
   const { createWebFetchTool } = await import("./web-tools.js");
   return createWebFetchTool({
@@ -43,6 +45,7 @@ async function createWebFetchToolForTest(params?: {
           fetch: {
             cacheTtlMinutes: 0,
             firecrawl: params?.firecrawl ?? { enabled: false },
+            ...(params?.ssrfPolicy ? { ssrfPolicy: params?.ssrfPolicy } : {}),
           },
         },
       },
@@ -64,6 +67,12 @@ describe("web_fetch SSRF protection", () => {
   beforeEach(() => {
     vi.spyOn(ssrf, "resolvePinnedHostname").mockImplementation((hostname) =>
       resolvePinnedHostname(hostname, lookupMock),
+    );
+    vi.spyOn(ssrf, "resolvePinnedHostnameWithPolicy").mockImplementation((hostname, params) =>
+      resolvePinnedHostnameWithPolicy(hostname, {
+        ...params,
+        lookupFn: lookupMock,
+      }),
     );
   });
 
@@ -136,5 +145,25 @@ describe("web_fetch SSRF protection", () => {
       status: 200,
       extractor: "raw",
     });
+  });
+
+  it("allows private IP when allowPrivateNetwork is true (via config)", async () => {
+    setMockFetch().mockResolvedValue(textResponse("ok"));
+    lookupMock.mockResolvedValue([{ address: "192.168.1.1", family: 4 }]);
+    const tool = await createWebFetchToolForTest({
+      ssrfPolicy: { allowPrivateNetwork: true },
+    });
+
+    await expect(tool?.execute?.("call", { url: "http://192.168.1.1" })).resolves.toBeDefined();
+  });
+
+  it("allows whitelisted hostnames (via config)", async () => {
+    setMockFetch().mockResolvedValue(textResponse("ok"));
+    lookupMock.mockResolvedValue([{ address: "192.168.1.1", family: 4 }]);
+    const tool = await createWebFetchToolForTest({
+      ssrfPolicy: { allowedHostnames: ["192.168.1.1"] },
+    });
+
+    await expect(tool?.execute?.("call", { url: "http://192.168.1.1" })).resolves.toBeDefined();
   });
 });
