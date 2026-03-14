@@ -38,15 +38,23 @@ async function createWebFetchToolForTest(params?: {
   ssrfPolicy?: ssrf.SsrFPolicy;
 }) {
   const { createWebFetchTool } = await import("./web-tools.js");
+
+  // Build config with ssrfPolicy injected via tools.web.fetch.ssrfPolicy
+  const fetchConfig: Record<string, unknown> = {
+    cacheTtlMinutes: 0,
+    firecrawl: params?.firecrawl ?? { enabled: false },
+  };
+
+  // Inject ssrfPolicy via config key if provided
+  if (params?.ssrfPolicy) {
+    fetchConfig.ssrfPolicy = params.ssrfPolicy;
+  }
+
   return createWebFetchTool({
     config: {
       tools: {
         web: {
-          fetch: {
-            cacheTtlMinutes: 0,
-            firecrawl: params?.firecrawl ?? { enabled: false },
-            ...(params?.ssrfPolicy ? { ssrfPolicy: params?.ssrfPolicy } : {}),
-          },
+          fetch: fetchConfig,
         },
       },
     },
