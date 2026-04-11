@@ -45,12 +45,12 @@ export const SUB2API_ANTHROPIC_DEFAULT_MODEL: ModelDefinitionConfig = {
   reasoning: true,
   input: ["text", "image"],
   cost: {
-    input: 0,
-    output: 0,
-    cacheRead: 0,
-    cacheWrite: 0,
+    input: 3,
+    output: 15,
+    cacheRead: 0.3,
+    cacheWrite: 3.75,
   },
-  contextWindow: 200_000,
+  contextWindow: 1_000_000,
   maxTokens: 8_192,
 };
 

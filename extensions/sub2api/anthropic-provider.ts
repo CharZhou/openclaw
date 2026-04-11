@@ -27,6 +27,8 @@ import {
 import {
   buildAnthropicDynamicModel,
   buildProviderConfig,
+  resolveSub2ApiAnthropicCost,
+  resolveSub2ApiAnthropicContextWindow,
   mergeModelCatalogs,
   readConfiguredProviderModels,
   resolveConfiguredProviderBaseUrl,
@@ -62,13 +64,8 @@ function resolveSub2ApiAnthropicForwardCompatModel(params: { modelId: string; ba
       provider: SUB2API_ANTHROPIC_PROVIDER_ID,
       reasoning: true,
       input: ["text", "image"] as Array<"text" | "image">,
-      cost: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-      },
-      contextWindow: 200_000,
+      cost: resolveSub2ApiAnthropicCost(trimmedModelId),
+      contextWindow: resolveSub2ApiAnthropicContextWindow(trimmedModelId),
       maxTokens: 8_192,
     };
     return params.baseUrl ? { ...model, baseUrl: params.baseUrl } : (model as ProviderRuntimeModel);
@@ -268,6 +265,7 @@ export function buildSub2ApiAnthropicProvider(): ProviderPlugin {
             input: ["text", "image"],
             contextWindow: 200_000,
             maxTokens: 8_192,
+            resolveContextWindow: resolveSub2ApiAnthropicContextWindow,
           },
         );
         const discoveredModels = await discoverSub2ApiAnthropicModels({

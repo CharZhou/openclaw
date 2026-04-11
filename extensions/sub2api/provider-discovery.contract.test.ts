@@ -117,8 +117,16 @@ describe("sub2api provider discovery contract", () => {
         api: "anthropic-messages",
         apiKey: "anthropic-key",
         models: expect.arrayContaining([
-          expect.objectContaining({ id: "claude-sonnet-4-6" }),
-          expect.objectContaining({ id: "claude-opus-4-6" }),
+          expect.objectContaining({
+            id: "claude-sonnet-4-6",
+            contextWindow: 1_000_000,
+            cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+          }),
+          expect.objectContaining({
+            id: "claude-opus-4-6",
+            contextWindow: 1_000_000,
+            cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+          }),
         ]),
       },
     });

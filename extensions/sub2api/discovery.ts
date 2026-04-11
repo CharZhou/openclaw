@@ -4,8 +4,8 @@ import {
   SELF_HOSTED_DEFAULT_CONTEXT_WINDOW,
   SELF_HOSTED_DEFAULT_MAX_TOKENS,
 } from "openclaw/plugin-sdk/provider-setup";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { SUB2API_OPENAI_PROVIDER_LABEL } from "./defaults.js";
+import { resolveSub2ApiAnthropicContextWindow, resolveSub2ApiAnthropicCost } from "./shared.js";
 
 type AnthropicModelsResponse = {
   data?: Array<{
@@ -13,13 +13,6 @@ type AnthropicModelsResponse = {
     display_name?: string;
   }>;
 };
-
-const DEFAULT_COST = {
-  input: 0,
-  output: 0,
-  cacheRead: 0,
-  cacheWrite: 0,
-} as const;
 
 export async function discoverSub2ApiOpenAIModels(params: {
   baseUrl: string;
@@ -34,15 +27,6 @@ export async function discoverSub2ApiOpenAIModels(params: {
     contextWindow: SELF_HOSTED_DEFAULT_CONTEXT_WINDOW,
     maxTokens: SELF_HOSTED_DEFAULT_MAX_TOKENS,
   });
-}
-
-function isModernAnthropicModel(modelId: string): boolean {
-  const normalized = normalizeLowercaseStringOrEmpty(modelId);
-  return (
-    normalized.startsWith("claude-opus-4") ||
-    normalized.startsWith("claude-sonnet-4") ||
-    normalized.startsWith("claude-haiku-4")
-  );
 }
 
 export async function discoverSub2ApiAnthropicModels(params: {
@@ -80,8 +64,8 @@ export async function discoverSub2ApiAnthropicModels(params: {
             : id,
         reasoning: id.toLowerCase().includes("claude"),
         input: ["text", "image"],
-        cost: DEFAULT_COST,
-        contextWindow: isModernAnthropicModel(id) ? 200_000 : 128_000,
+        cost: resolveSub2ApiAnthropicCost(id),
+        contextWindow: resolveSub2ApiAnthropicContextWindow(id),
         maxTokens: 8_192,
       });
     }

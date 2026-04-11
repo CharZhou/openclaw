@@ -169,6 +169,13 @@ describe("sub2api provider runtime contract", () => {
       provider: "sub2api-anthropic",
       api: "anthropic-messages",
       baseUrl: "https://sub2api.example.com/anthropic/v1",
+      contextWindow: 1_000_000,
+      cost: {
+        input: 3,
+        output: 15,
+        cacheRead: 0.3,
+        cacheWrite: 3.75,
+      },
     });
     expect(
       anthropicProvider.buildReplayPolicy?.({
