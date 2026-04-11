@@ -6,6 +6,8 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Plugins/Sub2API: add a bundled `sub2api` provider plugin with separate OpenAI Responses and Anthropic Messages provider entries, media-understanding registration, gateway model discovery, and configured-model fallback.
+
 ### Fixes
 
 - Telegram/sessions: keep topic-scoped session initialization on the canonical topic transcript path when inbound turns omit `MessageThreadId`, so one topic session no longer alternates between bare and topic-qualified transcript files. (#64869) thanks @jalehman.

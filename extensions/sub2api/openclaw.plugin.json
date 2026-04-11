@@ -1,0 +1,49 @@
+{
+  "id": "sub2api",
+  "enabledByDefault": true,
+  "name": "Sub2API",
+  "description": "Sub2API provider plugin for OpenAI Responses and Anthropic Messages gateways",
+  "providers": ["sub2api-openai", "sub2api-anthropic"],
+  "contracts": {
+    "mediaUnderstandingProviders": ["sub2api-openai", "sub2api-anthropic"]
+  },
+  "providerAuthEnvVars": {
+    "sub2api-openai": ["SUB2API_OPENAI_API_KEY"],
+    "sub2api-anthropic": ["SUB2API_ANTHROPIC_API_KEY"]
+  },
+  "providerAuthChoices": [
+    {
+      "provider": "sub2api-openai",
+      "method": "custom",
+      "choiceId": "sub2api-openai-api-key",
+      "choiceLabel": "Sub2API OpenAI API key",
+      "choiceHint": "OpenAI Responses-compatible gateway",
+      "groupId": "sub2api",
+      "groupLabel": "Sub2API",
+      "groupHint": "OpenAI Responses + Anthropic Messages API keys",
+      "optionKey": "sub2apiOpenaiApiKey",
+      "cliFlag": "--sub2api-openai-api-key",
+      "cliOption": "--sub2api-openai-api-key <key>",
+      "cliDescription": "Sub2API OpenAI-compatible API key"
+    },
+    {
+      "provider": "sub2api-anthropic",
+      "method": "custom",
+      "choiceId": "sub2api-anthropic-api-key",
+      "choiceLabel": "Sub2API Anthropic API key",
+      "choiceHint": "Anthropic Messages-compatible gateway",
+      "groupId": "sub2api",
+      "groupLabel": "Sub2API",
+      "groupHint": "OpenAI Responses + Anthropic Messages API keys",
+      "optionKey": "sub2apiAnthropicApiKey",
+      "cliFlag": "--sub2api-anthropic-api-key",
+      "cliOption": "--sub2api-anthropic-api-key <key>",
+      "cliDescription": "Sub2API Anthropic-compatible API key"
+    }
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

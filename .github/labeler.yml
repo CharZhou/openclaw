@@ -333,6 +333,10 @@
   - changed-files:
       - any-glob-to-any-file:
           - "extensions/synthetic/**"
+"extensions: sub2api":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "extensions/sub2api/**"
 "extensions: tavily":
   - changed-files:
       - any-glob-to-any-file:
