@@ -1,4 +1,6 @@
 import type { OpenClawConfig } from "../../../config/types.openclaw.js";
+import { resolveProviderWebSocketSessionPolicyWithPlugin } from "../../../plugins/provider-runtime.js";
+import type { ProviderRuntimeModel } from "../../../plugins/types.js";
 import { joinPresentTextSegments } from "../../../shared/text/join-segments.js";
 import { normalizeStructuredPromptSection } from "../../prompt-cache-stability.js";
 
@@ -39,12 +41,35 @@ export function resolveAttemptSpawnWorkspaceDir(params: {
 
 export function shouldUseOpenAIWebSocketTransport(params: {
   provider: string;
+  modelId?: string;
+  model?: ProviderRuntimeModel;
   modelApi?: string | null;
+  config?: OpenClawConfig;
+  workspaceDir?: string;
+  env?: NodeJS.ProcessEnv;
 }): boolean {
   // openai-codex normalizes to the ChatGPT backend HTTP path, not the public
   // OpenAI Responses websocket endpoint. Keep it on HTTP until a provider-
   // specific websocket target exists and is verified end-to-end.
-  return params.modelApi === "openai-responses" && params.provider === "openai";
+  if (params.modelApi !== "openai-responses") {
+    return false;
+  }
+  if (params.provider === "openai") {
+    return true;
+  }
+  return Boolean(
+    resolveProviderWebSocketSessionPolicyWithPlugin({
+      provider: params.provider,
+      config: params.config,
+      workspaceDir: params.workspaceDir,
+      env: params.env,
+      context: {
+        provider: params.provider,
+        modelId: params.modelId ?? params.model?.id ?? "",
+        model: params.model,
+      },
+    }),
+  );
 }
 
 export function shouldAppendAttemptCacheTtl(params: {

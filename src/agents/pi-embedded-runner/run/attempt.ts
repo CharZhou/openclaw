@@ -29,6 +29,7 @@ import {
   resolveProviderTextTransforms,
   transformProviderSystemPrompt,
 } from "../../../plugins/provider-runtime.js";
+import type { ProviderRuntimeModel } from "../../../plugins/types.js";
 import { isSubagentSessionKey } from "../../../routing/session-key.js";
 import { normalizeOptionalLowercaseString } from "../../../shared/string-coerce.js";
 import { normalizeOptionalString } from "../../../shared/string-coerce.js";
@@ -1021,7 +1022,12 @@ export async function runEmbeddedAttempt(
       });
       const shouldUseWebSocketTransport = shouldUseOpenAIWebSocketTransport({
         provider: params.provider,
+        modelId: params.model.id,
+        model: params.model as ProviderRuntimeModel,
         modelApi: params.model.api,
+        config: params.config,
+        workspaceDir: effectiveWorkspace,
+        env: process.env,
       });
       const wsApiKey = shouldUseWebSocketTransport
         ? await resolveEmbeddedAgentApiKey({

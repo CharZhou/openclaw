@@ -831,7 +831,12 @@ export async function compactEmbeddedPiSessionDirect(
       });
       const shouldUseWebSocketTransport = shouldUseOpenAIWebSocketTransport({
         provider,
+        modelId: effectiveModel.id,
+        model: effectiveModel,
         modelApi: effectiveModel.api,
+        config: params.config,
+        workspaceDir: effectiveWorkspace,
+        env: process.env,
       });
       const wsApiKey = shouldUseWebSocketTransport
         ? await resolveEmbeddedAgentApiKey({
