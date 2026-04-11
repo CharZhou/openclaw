@@ -171,7 +171,15 @@ export async function modelsStatusCommand(
     shouldEnableShellEnvFallback(process.env) || cfg.env?.shellEnv?.enabled === true;
 
   const providerAuth = providers
-    .map((provider) => resolveProviderAuthOverview({ provider, cfg, store, modelsPath }))
+    .map((provider) =>
+      resolveProviderAuthOverview({
+        provider,
+        cfg,
+        store,
+        modelsPath,
+        storePath: resolveAuthStorePathForDisplay(agentDir),
+      }),
+    )
     .filter((entry) => {
       const hasAny = entry.profiles.count > 0 || Boolean(entry.env) || Boolean(entry.modelsJson);
       return hasAny;

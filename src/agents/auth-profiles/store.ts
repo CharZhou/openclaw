@@ -23,6 +23,7 @@ import {
   mergeAuthProfileStores,
   mergeOAuthFileIntoStore,
 } from "./persisted.js";
+import { resolvePrimaryAuthAgentDir } from "./primary-agent.js";
 import { savePersistedAuthProfileState } from "./state.js";
 import type { AuthProfileStore } from "./types.js";
 
@@ -49,7 +50,7 @@ const loadedAuthStoreCache = new Map<
 >();
 
 function resolveRuntimeStoreKey(agentDir?: string): string {
-  return resolveAuthStorePath(agentDir);
+  return resolveAuthStorePath(agentDir ?? resolvePrimaryAuthAgentDir());
 }
 
 function cloneAuthProfileStore(store: AuthProfileStore): AuthProfileStore {
@@ -262,14 +263,24 @@ function loadAuthProfileStoreForAgent(
     return asStore;
   }
 
-  // Fallback: inherit auth-profiles from main agent if subagent has none
+  const primaryAgentDir = resolvePrimaryAuthAgentDir();
+
+  // Fallback: inherit auth-profiles from the primary auth agent if a secondary
+  // agent has none of its own.
   if (agentDir && !readOnly) {
-    const mainStore = loadPersistedAuthProfileStore();
-    if (mainStore && Object.keys(mainStore.profiles).length > 0) {
+    const primaryStore = loadPersistedAuthProfileStore(primaryAgentDir);
+    if (
+      primaryAgentDir !== agentDir &&
+      primaryStore &&
+      Object.keys(primaryStore.profiles).length > 0
+    ) {
       // Clone only secret-bearing profiles to subagent directory for auth inheritance.
-      saveJsonFile(authPath, buildPersistedAuthProfileSecretsStore(mainStore));
-      log.info("inherited auth-profiles from main agent", { agentDir });
-      const inherited = { version: mainStore.version, profiles: { ...mainStore.profiles } };
+      saveJsonFile(authPath, buildPersistedAuthProfileSecretsStore(primaryStore));
+      log.info("inherited auth-profiles from primary auth agent", {
+        agentDir,
+        primaryAgentDir,
+      });
+      const inherited = { version: primaryStore.version, profiles: { ...primaryStore.profiles } };
       writeCachedAuthProfileStore({
         authPath,
         authMtimeMs: readAuthStoreMtimeMs(authPath),
@@ -334,13 +345,14 @@ export function loadAuthProfileStoreForRuntime(
 ): AuthProfileStore {
   const store = loadAuthProfileStoreForAgent(agentDir, options);
   const authPath = resolveAuthStorePath(agentDir);
-  const mainAuthPath = resolveAuthStorePath();
-  if (!agentDir || authPath === mainAuthPath) {
+  const primaryAgentDir = resolvePrimaryAuthAgentDir();
+  const primaryAuthPath = resolveAuthStorePath(primaryAgentDir);
+  if (!agentDir || authPath === primaryAuthPath) {
     return overlayExternalAuthProfiles(store, { agentDir });
   }
 
-  const mainStore = loadAuthProfileStoreForAgent(undefined, options);
-  return overlayExternalAuthProfiles(mergeAuthProfileStores(mainStore, store), {
+  const primaryStore = loadAuthProfileStoreForAgent(primaryAgentDir, options);
+  return overlayExternalAuthProfiles(mergeAuthProfileStores(primaryStore, store), {
     agentDir,
   });
 }
@@ -360,13 +372,14 @@ export function ensureAuthProfileStore(
 
   const store = loadAuthProfileStoreForAgent(agentDir, options);
   const authPath = resolveAuthStorePath(agentDir);
-  const mainAuthPath = resolveAuthStorePath();
-  if (!agentDir || authPath === mainAuthPath) {
+  const primaryAgentDir = resolvePrimaryAuthAgentDir();
+  const primaryAuthPath = resolveAuthStorePath(primaryAgentDir);
+  if (!agentDir || authPath === primaryAuthPath) {
     return overlayExternalAuthProfiles(store, { agentDir });
   }
 
-  const mainStore = loadAuthProfileStoreForAgent(undefined, options);
-  const merged = mergeAuthProfileStores(mainStore, store);
+  const primaryStore = loadAuthProfileStoreForAgent(primaryAgentDir, options);
+  const merged = mergeAuthProfileStores(primaryStore, store);
 
   return overlayExternalAuthProfiles(merged, { agentDir });
 }
@@ -375,16 +388,17 @@ export function ensureAuthProfileStoreForLocalUpdate(agentDir?: string): AuthPro
   const options: LoadAuthProfileStoreOptions = { syncExternalCli: false };
   const store = loadAuthProfileStoreForAgent(agentDir, options);
   const authPath = resolveAuthStorePath(agentDir);
-  const mainAuthPath = resolveAuthStorePath();
-  if (!agentDir || authPath === mainAuthPath) {
+  const primaryAgentDir = resolvePrimaryAuthAgentDir();
+  const primaryAuthPath = resolveAuthStorePath(primaryAgentDir);
+  if (!agentDir || authPath === primaryAuthPath) {
     return store;
   }
 
-  const mainStore = loadAuthProfileStoreForAgent(undefined, {
+  const primaryStore = loadAuthProfileStoreForAgent(primaryAgentDir, {
     readOnly: true,
     syncExternalCli: false,
   });
-  return mergeAuthProfileStores(mainStore, store);
+  return mergeAuthProfileStores(primaryStore, store);
 }
 
 export function hasAnyAuthProfileStoreSource(agentDir?: string): boolean {
@@ -398,8 +412,9 @@ export function hasAnyAuthProfileStoreSource(agentDir?: string): boolean {
   }
 
   const authPath = resolveAuthStorePath(agentDir);
-  const mainAuthPath = resolveAuthStorePath();
-  if (agentDir && authPath !== mainAuthPath && hasStoredAuthProfileFiles(undefined)) {
+  const primaryAgentDir = resolvePrimaryAuthAgentDir();
+  const primaryAuthPath = resolveAuthStorePath(primaryAgentDir);
+  if (agentDir && authPath !== primaryAuthPath && hasStoredAuthProfileFiles(primaryAgentDir)) {
     return true;
   }
 

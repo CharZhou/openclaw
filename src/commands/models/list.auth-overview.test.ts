@@ -80,4 +80,28 @@ describe("resolveProviderAuthOverview", () => {
       }
     }
   });
+
+  it("renders the provided auth store path for profile-backed auth", () => {
+    const overview = resolveProviderAuthOverview({
+      provider: "sub2api-openai",
+      cfg: {},
+      store: {
+        version: 1,
+        profiles: {
+          "sub2api-openai:default": {
+            type: "api_key",
+            provider: "sub2api-openai",
+            key: "sk-sub2api-key",
+          },
+        },
+      } as never,
+      modelsPath: "/tmp/models.json",
+      storePath: "/tmp/agents/default/agent/auth-profiles.json",
+    });
+
+    expect(overview.effective).toEqual({
+      kind: "profiles",
+      detail: "/tmp/agents/default/agent/auth-profiles.json",
+    });
+  });
 });

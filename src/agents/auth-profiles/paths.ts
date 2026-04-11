@@ -2,27 +2,27 @@ import fs from "node:fs";
 import path from "node:path";
 import { saveJsonFile } from "../../infra/json-file.js";
 import { resolveUserPath } from "../../utils.js";
-import { resolveOpenClawAgentDir } from "../agent-paths.js";
 import {
   AUTH_PROFILE_FILENAME,
   AUTH_STATE_FILENAME,
   AUTH_STORE_VERSION,
   LEGACY_AUTH_FILENAME,
 } from "./constants.js";
+import { resolvePrimaryAuthAgentDir } from "./primary-agent.js";
 import type { AuthProfileSecretsStore } from "./types.js";
 
 export function resolveAuthStorePath(agentDir?: string): string {
-  const resolved = resolveUserPath(agentDir ?? resolveOpenClawAgentDir());
+  const resolved = resolveUserPath(agentDir ?? resolvePrimaryAuthAgentDir());
   return path.join(resolved, AUTH_PROFILE_FILENAME);
 }
 
 export function resolveLegacyAuthStorePath(agentDir?: string): string {
-  const resolved = resolveUserPath(agentDir ?? resolveOpenClawAgentDir());
+  const resolved = resolveUserPath(agentDir ?? resolvePrimaryAuthAgentDir());
   return path.join(resolved, LEGACY_AUTH_FILENAME);
 }
 
 export function resolveAuthStatePath(agentDir?: string): string {
-  const resolved = resolveUserPath(agentDir ?? resolveOpenClawAgentDir());
+  const resolved = resolveUserPath(agentDir ?? resolvePrimaryAuthAgentDir());
   return path.join(resolved, AUTH_STATE_FILENAME);
 }
 
