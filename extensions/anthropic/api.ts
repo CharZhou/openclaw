@@ -8,3 +8,10 @@ export {
   resolveAnthropicServiceTier,
   wrapAnthropicProviderStream,
 } from "./stream-wrappers.js";
+export {
+  buildAnthropicMessagesFamilyHooks,
+  matchesAnthropicModernModel,
+  resolveAnthropicFamilyReasoningOutputMode,
+  resolveAnthropicForwardCompatModel,
+  shouldUseAnthropicAdaptiveThinkingDefault,
+} from "./provider-family.js";

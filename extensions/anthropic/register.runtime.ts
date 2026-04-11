@@ -3,8 +3,6 @@ import type {
   OpenClawPluginApi,
   ProviderAuthContext,
   ProviderAuthMethodNonInteractiveContext,
-  ProviderResolveDynamicModelContext,
-  ProviderRuntimeModel,
 } from "openclaw/plugin-sdk/plugin-entry";
 import {
   applyAuthProfileConfig,
@@ -18,7 +16,6 @@ import {
   upsertAuthProfile,
   validateAnthropicSetupToken,
 } from "openclaw/plugin-sdk/provider-auth";
-import { cloneFirstTemplateModel } from "openclaw/plugin-sdk/provider-model-shared";
 import { fetchClaudeUsage } from "openclaw/plugin-sdk/provider-usage";
 import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import * as claudeCliAuth from "./cli-auth-seam.js";
@@ -29,29 +26,11 @@ import {
   CLAUDE_CLI_DEFAULT_ALLOWLIST_REFS,
   CLAUDE_CLI_DEFAULT_MODEL_REF,
 } from "./cli-shared.js";
-import {
-  applyAnthropicConfigDefaults,
-  normalizeAnthropicProviderConfig,
-} from "./config-defaults.js";
 import { anthropicMediaUnderstandingProvider } from "./media-understanding-provider.js";
-import { buildAnthropicReplayPolicy } from "./replay-policy.js";
-import { wrapAnthropicProviderStream } from "./stream-wrappers.js";
+import { buildAnthropicMessagesFamilyHooks } from "./provider-family.js";
 
 const PROVIDER_ID = "anthropic";
 const DEFAULT_ANTHROPIC_MODEL = "anthropic/claude-sonnet-4-6";
-const ANTHROPIC_OPUS_46_MODEL_ID = "claude-opus-4-6";
-const ANTHROPIC_OPUS_46_DOT_MODEL_ID = "claude-opus-4.6";
-const ANTHROPIC_OPUS_TEMPLATE_MODEL_IDS = ["claude-opus-4-5", "claude-opus-4.5"] as const;
-const ANTHROPIC_SONNET_46_MODEL_ID = "claude-sonnet-4-6";
-const ANTHROPIC_SONNET_46_DOT_MODEL_ID = "claude-sonnet-4.6";
-const ANTHROPIC_SONNET_TEMPLATE_MODEL_IDS = ["claude-sonnet-4-5", "claude-sonnet-4.5"] as const;
-const ANTHROPIC_MODERN_MODEL_PREFIXES = [
-  "claude-opus-4-6",
-  "claude-sonnet-4-6",
-  "claude-opus-4-5",
-  "claude-sonnet-4-5",
-  "claude-haiku-4-5",
-] as const;
 const _ANTHROPIC_OAUTH_ALLOWLIST = [
   "anthropic/claude-sonnet-4-6",
   "anthropic/claude-opus-4-6",
@@ -184,84 +163,6 @@ async function runAnthropicSetupTokenNonInteractive(
   };
 }
 
-function resolveAnthropic46ForwardCompatModel(params: {
-  ctx: ProviderResolveDynamicModelContext;
-  dashModelId: string;
-  dotModelId: string;
-  dashTemplateId: string;
-  dotTemplateId: string;
-  fallbackTemplateIds: readonly string[];
-}): ProviderRuntimeModel | undefined {
-  const trimmedModelId = params.ctx.modelId.trim();
-  const lower = normalizeLowercaseStringOrEmpty(trimmedModelId);
-  const is46Model =
-    lower === params.dashModelId ||
-    lower === params.dotModelId ||
-    lower.startsWith(`${params.dashModelId}-`) ||
-    lower.startsWith(`${params.dotModelId}-`);
-  if (!is46Model) {
-    return undefined;
-  }
-
-  const templateIds: string[] = [];
-  if (lower.startsWith(params.dashModelId)) {
-    templateIds.push(lower.replace(params.dashModelId, params.dashTemplateId));
-  }
-  if (lower.startsWith(params.dotModelId)) {
-    templateIds.push(lower.replace(params.dotModelId, params.dotTemplateId));
-  }
-  templateIds.push(...params.fallbackTemplateIds);
-
-  return cloneFirstTemplateModel({
-    providerId: PROVIDER_ID,
-    modelId: trimmedModelId,
-    templateIds,
-    ctx: params.ctx,
-    patch:
-      normalizeLowercaseStringOrEmpty(params.ctx.provider) === CLAUDE_CLI_BACKEND_ID
-        ? { provider: CLAUDE_CLI_BACKEND_ID }
-        : undefined,
-  });
-}
-
-function resolveAnthropicForwardCompatModel(
-  ctx: ProviderResolveDynamicModelContext,
-): ProviderRuntimeModel | undefined {
-  return (
-    resolveAnthropic46ForwardCompatModel({
-      ctx,
-      dashModelId: ANTHROPIC_OPUS_46_MODEL_ID,
-      dotModelId: ANTHROPIC_OPUS_46_DOT_MODEL_ID,
-      dashTemplateId: "claude-opus-4-5",
-      dotTemplateId: "claude-opus-4.5",
-      fallbackTemplateIds: ANTHROPIC_OPUS_TEMPLATE_MODEL_IDS,
-    }) ??
-    resolveAnthropic46ForwardCompatModel({
-      ctx,
-      dashModelId: ANTHROPIC_SONNET_46_MODEL_ID,
-      dotModelId: ANTHROPIC_SONNET_46_DOT_MODEL_ID,
-      dashTemplateId: "claude-sonnet-4-5",
-      dotTemplateId: "claude-sonnet-4.5",
-      fallbackTemplateIds: ANTHROPIC_SONNET_TEMPLATE_MODEL_IDS,
-    })
-  );
-}
-
-function shouldUseAnthropicAdaptiveThinkingDefault(modelId: string): boolean {
-  const lowerModelId = normalizeLowercaseStringOrEmpty(modelId);
-  return (
-    lowerModelId.startsWith(ANTHROPIC_OPUS_46_MODEL_ID) ||
-    lowerModelId.startsWith(ANTHROPIC_OPUS_46_DOT_MODEL_ID) ||
-    lowerModelId.startsWith(ANTHROPIC_SONNET_46_MODEL_ID) ||
-    lowerModelId.startsWith(ANTHROPIC_SONNET_46_DOT_MODEL_ID)
-  );
-}
-
-function matchesAnthropicModernModel(modelId: string): boolean {
-  const lower = normalizeLowercaseStringOrEmpty(modelId);
-  return ANTHROPIC_MODERN_MODEL_PREFIXES.some((prefix) => lower.startsWith(prefix));
-}
-
 function buildAnthropicAuthDoctorHint(params: {
   config?: ProviderAuthContext["config"];
   store: AuthProfileStore;
@@ -378,6 +279,7 @@ async function runAnthropicCliMigrationNonInteractive(ctx: {
 }
 
 export function registerAnthropicPlugin(api: OpenClawPluginApi): void {
+  const anthropicFamilyHooks = buildAnthropicMessagesFamilyHooks();
   const providerId = "anthropic";
   const defaultAnthropicModel = "anthropic/claude-sonnet-4-6";
   const _anthropicOauthAllowlist = [
@@ -466,25 +368,14 @@ export function registerAnthropicPlugin(api: OpenClawPluginApi): void {
         },
       }),
     ],
-    normalizeConfig: ({ providerConfig }) => normalizeAnthropicProviderConfig(providerConfig),
-    applyConfigDefaults: ({ config, env }) => applyAnthropicConfigDefaults({ config, env }),
-    resolveDynamicModel: (ctx) => resolveAnthropicForwardCompatModel(ctx),
     resolveSyntheticAuth: ({ provider }) =>
       normalizeLowercaseStringOrEmpty(provider) === CLAUDE_CLI_BACKEND_ID
         ? resolveClaudeCliSyntheticAuth()
         : undefined,
-    buildReplayPolicy: buildAnthropicReplayPolicy,
-    isModernModelRef: ({ modelId }) => matchesAnthropicModernModel(modelId),
-    resolveReasoningOutputMode: () => "native",
-    wrapStreamFn: wrapAnthropicProviderStream,
-    resolveDefaultThinkingLevel: ({ modelId }) =>
-      matchesAnthropicModernModel(modelId) && shouldUseAnthropicAdaptiveThinkingDefault(modelId)
-        ? "adaptive"
-        : undefined,
     resolveUsageAuth: async (ctx) => await ctx.resolveOAuthToken(),
     fetchUsageSnapshot: async (ctx) =>
       await fetchClaudeUsage(ctx.token, ctx.timeoutMs, ctx.fetchFn),
-    isCacheTtlEligible: () => true,
+    ...anthropicFamilyHooks,
     buildAuthDoctorHint: (ctx) =>
       buildAnthropicAuthDoctorHint({
         config: ctx.config,

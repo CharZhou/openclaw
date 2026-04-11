@@ -10,6 +10,16 @@ export {
   OPENAI_DEFAULT_TTS_VOICE,
 } from "./default-models.js";
 export { buildOpenAICodexProvider } from "./openai-codex-catalog.js";
+export {
+  augmentOpenAIGpt54CatalogEntries,
+  buildOpenAIResponsesExtraParams,
+  isOpenAIModernModelRef,
+  normalizeOpenAIResponsesTransport,
+  OPENAI_RESPONSES_STREAM_HOOKS,
+  resolveOpenAIGpt54ForwardCompatModel,
+  shouldUseOpenAIResponsesTransport,
+  supportsOpenAIXHighThinking,
+} from "./provider-family.js";
 export { buildOpenAIProvider } from "./openai-provider.js";
 export { buildOpenAIRealtimeTranscriptionProvider } from "./realtime-transcription-provider.js";
 export { buildOpenAIRealtimeVoiceProvider } from "./realtime-voice-provider.js";
