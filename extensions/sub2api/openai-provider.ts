@@ -240,11 +240,9 @@ function resolveSub2ApiOpenAITransportTurnState(ctx: {
   sessionId?: string;
   turnId: string;
   attempt: number;
-  transport: string;
 }):
   | {
       headers: Record<string, string>;
-      metadata: Record<string, string>;
     }
   | undefined {
   const sessionHeaders = resolveSessionHeaders({
@@ -261,12 +259,6 @@ function resolveSub2ApiOpenAITransportTurnState(ctx: {
       ...sessionHeaders,
       "x-openclaw-turn-id": turnId,
       "x-openclaw-turn-attempt": attempt,
-    },
-    metadata: {
-      openclaw_session_id: sessionHeaders["x-openclaw-session-id"] ?? "",
-      openclaw_turn_id: turnId,
-      openclaw_turn_attempt: attempt,
-      openclaw_transport: ctx.transport,
     },
   };
 }

@@ -84,6 +84,21 @@ describe("sub2api provider runtime contract", () => {
       }),
     });
     expect(
+      openaiProvider.resolveTransportTurnState?.({
+        provider: "sub2api-openai",
+        sessionId: "sess-1",
+        turnId: "turn-1",
+        attempt: 1,
+        transport: "websocket",
+        model: {
+          provider: "sub2api-openai",
+          id: "gpt-5.4",
+          api: "openai-responses",
+          baseUrl: "https://sub2api.example.com/openai/v1",
+        },
+      } as never)?.metadata,
+    ).toBeUndefined();
+    expect(
       openaiProvider.resolveWebSocketSessionPolicy?.({
         provider: "sub2api-openai",
         sessionId: "sess-1",
