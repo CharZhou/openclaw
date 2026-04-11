@@ -49,11 +49,51 @@ export function trimConfiguredBaseUrl(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+export type Sub2ApiToolResultRouteTarget = {
+  providerId: "sub2api-openai" | "sub2api-anthropic";
+  modelId: string;
+};
+
 export function resolveConfiguredProviderBaseUrl(
   config: OpenClawConfig | undefined,
   providerId: string,
 ): string | undefined {
   return trimConfiguredBaseUrl(config?.models?.providers?.[providerId]?.baseUrl);
+}
+
+export function parseSub2ApiToolResultModelRef(params: {
+  value: unknown;
+  currentProviderId: string;
+}): Sub2ApiToolResultRouteTarget | undefined {
+  if (typeof params.value !== "string") {
+    return undefined;
+  }
+  const trimmed = params.value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const slashIndex = trimmed.indexOf("/");
+  if (slashIndex === -1) {
+    if (
+      params.currentProviderId === "sub2api-openai" ||
+      params.currentProviderId === "sub2api-anthropic"
+    ) {
+      return {
+        providerId: params.currentProviderId,
+        modelId: trimmed,
+      };
+    }
+    return undefined;
+  }
+  const providerId = trimmed.slice(0, slashIndex).trim();
+  const modelId = trimmed.slice(slashIndex + 1).trim();
+  if (!modelId) {
+    return undefined;
+  }
+  if (providerId === "sub2api-openai" || providerId === "sub2api-anthropic") {
+    return { providerId, modelId };
+  }
+  return undefined;
 }
 
 export function readConfiguredProviderModels(
@@ -189,4 +229,22 @@ export function buildProviderConfig(params: {
     apiKey: params.apiKey,
     models: params.models,
   };
+}
+
+export function buildSub2ApiToolResultRouteModel(params: {
+  config: OpenClawConfig | undefined;
+  target: Sub2ApiToolResultRouteTarget;
+}): ProviderRuntimeModel {
+  const baseUrl = resolveConfiguredProviderBaseUrl(params.config, params.target.providerId);
+  return params.target.providerId === "sub2api-openai"
+    ? buildOpenAiDynamicModel({
+        providerId: params.target.providerId,
+        modelId: params.target.modelId,
+        baseUrl,
+      })
+    : buildAnthropicDynamicModel({
+        providerId: params.target.providerId,
+        modelId: params.target.modelId,
+        baseUrl,
+      });
 }

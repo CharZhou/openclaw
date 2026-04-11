@@ -9,6 +9,7 @@ import {
 } from "openclaw/plugin-sdk/provider-stream";
 import { createSubsystemLogger } from "openclaw/plugin-sdk/runtime-env";
 import { normalizeLowercaseStringOrEmpty, readStringValue } from "openclaw/plugin-sdk/text-runtime";
+import { buildSub2ApiToolResultRouteModel, parseSub2ApiToolResultModelRef } from "./shared.js";
 
 const log = createSubsystemLogger("sub2api/anthropic-stream");
 
@@ -188,6 +189,81 @@ function resolveAnthropicServiceTier(
   return normalized;
 }
 
+function shouldRouteToolResultFollowup(messages: unknown): boolean {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return false;
+  }
+  const lastMessage = messages.at(-1);
+  return (
+    Boolean(lastMessage) &&
+    typeof lastMessage === "object" &&
+    (lastMessage as { role?: unknown }).role === "toolResult"
+  );
+}
+
+function createSub2ApiToolResultModelWrapper(
+  baseStreamFn: StreamFn | undefined,
+  ctx: ProviderWrapStreamFnContext,
+): StreamFn {
+  const underlying = baseStreamFn ?? streamSimple;
+  const rawToolResultModel = ctx.extraParams?.toolResultModel ?? ctx.extraParams?.tool_result_model;
+  return (model, context, options) => {
+    const routeResolved = ctx.extraParams?.__sub2apiRouteResolved === true;
+    const target = routeResolved
+      ? undefined
+      : parseSub2ApiToolResultModelRef({
+          value: rawToolResultModel,
+          currentProviderId: ctx.provider,
+        });
+    if (
+      !target ||
+      (target.providerId === model.provider && target.modelId === model.id) ||
+      !shouldRouteToolResultFollowup(context.messages)
+    ) {
+      return underlying(model, context, options);
+    }
+    if (target.providerId === ctx.provider) {
+      return underlying(
+        {
+          ...model,
+          id: target.modelId,
+          name: target.modelId,
+        },
+        context,
+        options,
+      );
+    }
+    return (async () => {
+      const targetModel = buildSub2ApiToolResultRouteModel({
+        config: ctx.config,
+        target,
+      });
+      const targetStreamBase = ctx.createStreamFnForModel?.(targetModel);
+      if (!targetStreamBase) {
+        return underlying(model, context, options);
+      }
+      const targetApiKey = await ctx.resolveProviderApiKey?.(target.providerId);
+      const { wrapSub2ApiOpenAIProviderStream } = await import("./openai-stream.js");
+      const targetStream =
+        wrapSub2ApiOpenAIProviderStream({
+          ...ctx,
+          provider: target.providerId,
+          modelId: target.modelId,
+          model: targetModel,
+          streamFn: targetStreamBase,
+          extraParams: {
+            ...ctx.extraParams,
+            __sub2apiRouteResolved: true,
+          },
+        }) ?? targetStreamBase;
+      return targetStream(targetModel, context, {
+        ...options,
+        ...(targetApiKey ? { apiKey: targetApiKey } : {}),
+      });
+    })() as ReturnType<StreamFn>;
+  };
+}
+
 export function wrapSub2ApiAnthropicProviderStream(
   ctx: ProviderWrapStreamFnContext,
 ): StreamFn | undefined {
@@ -205,5 +281,6 @@ export function wrapSub2ApiAnthropicProviderStream(
     fastMode !== undefined
       ? (streamFn) => createAnthropicFastModeWrapper(streamFn, fastMode)
       : undefined,
+    (streamFn) => createSub2ApiToolResultModelWrapper(streamFn, ctx),
   );
 }

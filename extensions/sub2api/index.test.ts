@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import type { StreamFn } from "@mariozechner/pi-agent-core";
 import type { Context, Model, SimpleStreamOptions } from "@mariozechner/pi-ai";
+import type { ProviderWrapStreamFnContext } from "openclaw/plugin-sdk/plugin-entry";
 import { capturePluginRegistration } from "openclaw/plugin-sdk/testing";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -87,6 +88,45 @@ function runWrappedPayloadCase(params: {
   return {
     model: capturedModel,
     payload,
+    options: capturedOptions,
+  };
+}
+
+async function runWrappedModelRouteCase(params: {
+  wrap: (ctx: ProviderWrapStreamFnContext) => StreamFn | null | undefined;
+  provider: string;
+  modelId: string;
+  model: Model<"openai-responses"> | Model<"anthropic-messages">;
+  extraParams?: Record<string, unknown>;
+  context?: Context;
+  config?: Record<string, unknown>;
+  resolveProviderApiKey?: (provider: string) => Promise<string | undefined>;
+}) {
+  let capturedModel: Model<"openai-responses"> | Model<"anthropic-messages"> | undefined;
+  let capturedOptions: SimpleStreamOptions | undefined;
+  const targetBaseStream: StreamFn = (model, _context, options) => {
+    capturedModel = model as Model<"openai-responses"> | Model<"anthropic-messages">;
+    capturedOptions = options;
+    return {} as ReturnType<StreamFn>;
+  };
+
+  const streamFn = params.wrap({
+    provider: params.provider,
+    modelId: params.modelId,
+    extraParams: params.extraParams,
+    config: (params.config ?? {}) as never,
+    agentDir: "/tmp/sub2api-route-test",
+    streamFn: targetBaseStream,
+    model: params.model as never,
+    resolveProviderApiKey: params.resolveProviderApiKey,
+    createStreamFnForModel: () => targetBaseStream,
+  } as never);
+
+  const context: Context = params.context ?? { messages: [] };
+  await streamFn?.(params.model, context, {});
+
+  return {
+    model: capturedModel,
     options: capturedOptions,
   };
 }
@@ -449,6 +489,64 @@ describe("sub2api-openai provider", () => {
     expect(result.model?.id).toBe("gpt-5.4-mini");
   });
 
+  it("routes toolResult follow-up turns across providers to Anthropic", async () => {
+    const provider = buildSub2ApiOpenAIProvider();
+    const wrap = provider.wrapStreamFn;
+    expect(wrap).toBeTypeOf("function");
+    if (!wrap) {
+      throw new Error("expected Sub2API OpenAI wrapper");
+    }
+
+    const result = await runWrappedModelRouteCase({
+      wrap,
+      provider: "sub2api-openai",
+      modelId: "gpt-5.4",
+      extraParams: {
+        toolResultModel: "sub2api-anthropic/claude-haiku-4-5",
+      },
+      config: {
+        models: {
+          providers: {
+            "sub2api-anthropic": {
+              baseUrl: "https://sub2api.example.com/anthropic/v1",
+            },
+          },
+        },
+      },
+      resolveProviderApiKey: async (providerId: string) =>
+        providerId === "sub2api-anthropic" ? "anthropic-key" : undefined,
+      model: {
+        api: "openai-responses",
+        provider: "sub2api-openai",
+        id: "gpt-5.4",
+        name: "gpt-5.4",
+        reasoning: true,
+        input: ["text", "image"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 1_050_000,
+        maxTokens: 128_000,
+        baseUrl: "https://sub2api.example.com/openai/v1",
+      } as Model<"openai-responses">,
+      context: {
+        messages: [
+          {
+            role: "toolResult",
+            toolCallId: "call_1",
+            toolName: "read_file",
+            content: [{ type: "text", text: "done" }],
+          } as never,
+        ],
+      },
+    });
+
+    expect(result.model).toMatchObject({
+      provider: "sub2api-anthropic",
+      id: "claude-haiku-4-5",
+      api: "anthropic-messages",
+    });
+    expect(result.options?.apiKey).toBe("anthropic-key");
+  });
+
   it("discovers OpenAI-compatible models from the gateway", async () => {
     const provider = buildSub2ApiOpenAIProvider();
     const fetchMock = vi.fn().mockResolvedValueOnce({
@@ -707,5 +805,105 @@ describe("sub2api-anthropic provider", () => {
       provider: "sub2api-anthropic",
       mode: "api_key",
     });
+  });
+
+  it("routes Anthropic toolResult follow-up turns to same-provider toolResultModel", async () => {
+    const provider = buildSub2ApiAnthropicProvider();
+    const wrap = provider.wrapStreamFn;
+    expect(wrap).toBeTypeOf("function");
+    if (!wrap) {
+      throw new Error("expected Sub2API Anthropic wrapper");
+    }
+
+    const result = await runWrappedModelRouteCase({
+      wrap,
+      provider: "sub2api-anthropic",
+      modelId: "claude-sonnet-4-6",
+      extraParams: {
+        toolResultModel: "claude-haiku-4-5",
+      },
+      model: {
+        api: "anthropic-messages",
+        provider: "sub2api-anthropic",
+        id: "claude-sonnet-4-6",
+        name: "claude-sonnet-4-6",
+        reasoning: true,
+        input: ["text", "image"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 1_000_000,
+        maxTokens: 8_192,
+        baseUrl: "https://sub2api.example.com/anthropic/v1",
+      } as Model<"anthropic-messages">,
+      context: {
+        messages: [
+          {
+            role: "toolResult",
+            toolCallId: "call_1",
+            toolName: "read_file",
+            content: [{ type: "text", text: "done" }],
+          } as never,
+        ],
+      },
+    });
+
+    expect(result.model?.id).toBe("claude-haiku-4-5");
+  });
+
+  it("routes Anthropic toolResult follow-up turns across providers to OpenAI", async () => {
+    const provider = buildSub2ApiAnthropicProvider();
+    const wrap = provider.wrapStreamFn;
+    expect(wrap).toBeTypeOf("function");
+    if (!wrap) {
+      throw new Error("expected Sub2API Anthropic wrapper");
+    }
+
+    const result = await runWrappedModelRouteCase({
+      wrap,
+      provider: "sub2api-anthropic",
+      modelId: "claude-sonnet-4-6",
+      extraParams: {
+        toolResultModel: "sub2api-openai/gpt-5.4-mini",
+      },
+      config: {
+        models: {
+          providers: {
+            "sub2api-openai": {
+              baseUrl: "https://sub2api.example.com/openai/v1",
+            },
+          },
+        },
+      },
+      resolveProviderApiKey: async (providerId: string) =>
+        providerId === "sub2api-openai" ? "openai-key" : undefined,
+      model: {
+        api: "anthropic-messages",
+        provider: "sub2api-anthropic",
+        id: "claude-sonnet-4-6",
+        name: "claude-sonnet-4-6",
+        reasoning: true,
+        input: ["text", "image"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 1_000_000,
+        maxTokens: 8_192,
+        baseUrl: "https://sub2api.example.com/anthropic/v1",
+      } as Model<"anthropic-messages">,
+      context: {
+        messages: [
+          {
+            role: "toolResult",
+            toolCallId: "call_1",
+            toolName: "read_file",
+            content: [{ type: "text", text: "done" }],
+          } as never,
+        ],
+      },
+    });
+
+    expect(result.model).toMatchObject({
+      provider: "sub2api-openai",
+      id: "gpt-5.4-mini",
+      api: "openai-responses",
+    });
+    expect(result.options?.apiKey).toBe("openai-key");
   });
 });

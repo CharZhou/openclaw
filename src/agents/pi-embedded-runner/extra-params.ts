@@ -9,6 +9,8 @@ import {
   wrapProviderStreamFn as wrapProviderStreamFnRuntime,
 } from "../../plugins/provider-runtime.js";
 import type { ProviderRuntimeModel } from "../../plugins/types.js";
+import { resolveApiKeyForProvider } from "../model-auth.js";
+import { registerProviderStreamForModel } from "../provider-stream.js";
 import { createGoogleThinkingPayloadWrapper } from "./google-stream-wrappers.js";
 import { log } from "./logger.js";
 import { createMinimaxThinkingDisabledWrapper } from "./minimax-stream-wrappers.js";
@@ -499,6 +501,22 @@ export function applyExtraParamsToAgent(
       thinkingLevel,
       model,
       streamFn: providerStreamBase,
+      resolveProviderApiKey: async (providerId) =>
+        (
+          await resolveApiKeyForProvider({
+            provider: providerId,
+            cfg,
+            agentDir,
+          }).catch(() => undefined)
+        )?.apiKey,
+      createStreamFnForModel: (nextModel) =>
+        registerProviderStreamForModel({
+          model: nextModel,
+          cfg,
+          agentDir,
+          workspaceDir,
+          env: process.env,
+        }),
     },
   });
   agent.streamFn = pluginWrappedStreamFn ?? providerStreamBase;

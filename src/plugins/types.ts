@@ -792,6 +792,8 @@ export type ProviderCreateStreamFnContext = {
 export type ProviderWrapStreamFnContext = ProviderPrepareExtraParamsContext & {
   model?: ProviderRuntimeModel;
   streamFn?: StreamFn;
+  resolveProviderApiKey?: (provider: string) => Promise<string | undefined>;
+  createStreamFnForModel?: (model: ProviderRuntimeModel) => StreamFn | undefined;
 };
 
 /**

@@ -13,37 +13,10 @@ import {
   normalizeLowercaseStringOrEmpty,
   normalizeOptionalLowercaseString,
 } from "openclaw/plugin-sdk/text-runtime";
+import { buildSub2ApiToolResultRouteModel, parseSub2ApiToolResultModelRef } from "./shared.js";
 
 type OpenAICacheRetention = "none" | "short" | "long";
 type OpenAITextVerbosity = "low" | "medium" | "high";
-
-function resolveSub2ApiToolResultModelId(
-  extraParams: Record<string, unknown> | undefined,
-  provider: string,
-): string | undefined {
-  const raw =
-    typeof extraParams?.toolResultModel === "string"
-      ? extraParams.toolResultModel
-      : typeof extraParams?.tool_result_model === "string"
-        ? extraParams.tool_result_model
-        : undefined;
-  const trimmed = raw?.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-  const slashIndex = trimmed.indexOf("/");
-  if (slashIndex === -1) {
-    return trimmed;
-  }
-  const providerId = trimmed.slice(0, slashIndex).trim();
-  const modelId = trimmed.slice(slashIndex + 1).trim();
-  if (!modelId) {
-    return undefined;
-  }
-  return normalizeLowercaseStringOrEmpty(providerId) === normalizeLowercaseStringOrEmpty(provider)
-    ? modelId
-    : undefined;
-}
 
 function shouldRouteToolResultFollowup(messages: unknown): boolean {
   if (!Array.isArray(messages) || messages.length === 0) {
@@ -222,24 +195,61 @@ function createSub2ApiToolResultModelWrapper(
   ctx: ProviderWrapStreamFnContext,
 ): StreamFn {
   const underlying = baseStreamFn ?? streamSimple;
-  const toolResultModelId = resolveSub2ApiToolResultModelId(ctx.extraParams, ctx.provider);
+  const rawToolResultModel = ctx.extraParams?.toolResultModel ?? ctx.extraParams?.tool_result_model;
   return (model, context, options) => {
+    const routeResolved = ctx.extraParams?.__sub2apiRouteResolved === true;
+    const target = routeResolved
+      ? undefined
+      : parseSub2ApiToolResultModelRef({
+          value: rawToolResultModel,
+          currentProviderId: ctx.provider,
+        });
     if (
-      !toolResultModelId ||
-      model.id === toolResultModelId ||
+      !target ||
+      (target.providerId === model.provider && target.modelId === model.id) ||
       !shouldRouteToolResultFollowup(context.messages)
     ) {
       return underlying(model, context, options);
     }
-    return underlying(
-      {
-        ...model,
-        id: toolResultModelId,
-        name: toolResultModelId,
-      },
-      context,
-      options,
-    );
+    if (target.providerId === ctx.provider) {
+      return underlying(
+        {
+          ...model,
+          id: target.modelId,
+          name: target.modelId,
+        },
+        context,
+        options,
+      );
+    }
+    return (async () => {
+      const targetModel = buildSub2ApiToolResultRouteModel({
+        config: ctx.config,
+        target,
+      });
+      const targetStreamBase = ctx.createStreamFnForModel?.(targetModel);
+      if (!targetStreamBase) {
+        return underlying(model, context, options);
+      }
+      const targetApiKey = await ctx.resolveProviderApiKey?.(target.providerId);
+      const { wrapSub2ApiAnthropicProviderStream } = await import("./anthropic-stream.js");
+      const targetStream =
+        wrapSub2ApiAnthropicProviderStream({
+          ...ctx,
+          provider: target.providerId,
+          modelId: target.modelId,
+          model: targetModel,
+          streamFn: targetStreamBase,
+          extraParams: {
+            ...ctx.extraParams,
+            __sub2apiRouteResolved: true,
+          },
+        }) ?? targetStreamBase;
+      return targetStream(targetModel, context, {
+        ...options,
+        ...(targetApiKey ? { apiKey: targetApiKey } : {}),
+      });
+    })() as ReturnType<StreamFn>;
   };
 }
 
