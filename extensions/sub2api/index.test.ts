@@ -49,8 +49,10 @@ function runWrappedPayloadCase(params: {
   model: Model<"openai-responses">;
   extraParams?: Record<string, unknown>;
   payload?: Record<string, unknown>;
+  context?: Context;
 }) {
   const payload = params.payload ?? {};
+  let capturedModel: Model<"openai-responses"> | undefined;
   let capturedOptions:
     | (SimpleStreamOptions & {
         openaiWsWarmup?: boolean;
@@ -58,6 +60,7 @@ function runWrappedPayloadCase(params: {
       })
     | undefined;
   const baseStreamFn: StreamFn = (model, _context, options) => {
+    capturedModel = model as Model<"openai-responses">;
     capturedOptions = options as
       | (SimpleStreamOptions & {
           openaiWsWarmup?: boolean;
@@ -78,10 +81,11 @@ function runWrappedPayloadCase(params: {
     model: params.model as never,
   } as never);
 
-  const context: Context = { messages: [] };
+  const context: Context = params.context ?? { messages: [] };
   void streamFn?.(params.model, context, {});
 
   return {
+    model: capturedModel,
     payload,
     options: capturedOptions,
   };
@@ -181,6 +185,34 @@ describe("sub2api-openai provider", () => {
       } as never),
     ).toEqual({
       transport: "auto",
+    });
+  });
+
+  it("passes configured toolResultModel through provider-owned extra params", () => {
+    const provider = buildSub2ApiOpenAIProvider();
+
+    expect(
+      provider.prepareExtraParams?.({
+        provider: "sub2api-openai",
+        modelId: "gpt-5.4",
+        config: {
+          agents: {
+            defaults: {
+              models: {
+                "sub2api-openai/gpt-5.4": {
+                  params: {
+                    toolResultModel: "gpt-5.4-mini",
+                  },
+                },
+              },
+            },
+          },
+        },
+        extraParams: {},
+      } as never),
+    ).toMatchObject({
+      transport: "auto",
+      toolResultModel: "gpt-5.4-mini",
     });
   });
 
@@ -372,6 +404,49 @@ describe("sub2api-openai provider", () => {
         type: "web_search",
       }),
     ]);
+  });
+
+  it("routes toolResult follow-up turns to toolResultModel", () => {
+    const provider = buildSub2ApiOpenAIProvider();
+    const wrap = provider.wrapStreamFn;
+    expect(wrap).toBeTypeOf("function");
+    if (!wrap) {
+      throw new Error("expected Sub2API OpenAI wrapper");
+    }
+
+    const result = runWrappedPayloadCase({
+      wrap,
+      provider: "sub2api-openai",
+      modelId: "gpt-5.4",
+      extraParams: {
+        toolResultModel: "gpt-5.4-mini",
+      },
+      model: {
+        api: "openai-responses",
+        provider: "sub2api-openai",
+        id: "gpt-5.4",
+        name: "gpt-5.4",
+        reasoning: true,
+        input: ["text", "image"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 1_050_000,
+        maxTokens: 128_000,
+        baseUrl: "https://sub2api.example.com/openai/v1",
+      } as Model<"openai-responses">,
+      context: {
+        messages: [
+          {
+            role: "toolResult",
+            toolCallId: "call_1",
+            toolName: "read_file",
+            content: [{ type: "text", text: "done" }],
+          } as never,
+        ],
+      },
+      payload: {},
+    });
+
+    expect(result.model?.id).toBe("gpt-5.4-mini");
   });
 
   it("discovers OpenAI-compatible models from the gateway", async () => {

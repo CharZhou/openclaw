@@ -486,9 +486,16 @@ export function buildSub2ApiOpenAIProvider(): ProviderPlugin {
       const params = resolveSub2ApiModelParams(ctx.config, ctx.modelId);
       const codexTextVerbosityProfile = params?.codexTextVerbosityProfile;
       const enableCodexCodingDefaults = params?.codexCodingDefaults === true;
+      const configuredToolResultModel =
+        typeof params?.toolResultModel === "string" ? params.toolResultModel.trim() : "";
       return {
         ...ctx.extraParams,
         ...(hasSupportedTransport ? {} : { transport: "auto" }),
+        ...(ctx.extraParams?.toolResultModel === undefined &&
+        ctx.extraParams?.tool_result_model === undefined &&
+        configuredToolResultModel
+          ? { toolResultModel: configuredToolResultModel }
+          : {}),
         ...(ctx.extraParams?.textVerbosity === undefined &&
         ctx.extraParams?.text_verbosity === undefined &&
         typeof codexTextVerbosityProfile === "string"

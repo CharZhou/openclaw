@@ -17,6 +17,46 @@ import {
 type OpenAICacheRetention = "none" | "short" | "long";
 type OpenAITextVerbosity = "low" | "medium" | "high";
 
+function resolveSub2ApiToolResultModelId(
+  extraParams: Record<string, unknown> | undefined,
+  provider: string,
+): string | undefined {
+  const raw =
+    typeof extraParams?.toolResultModel === "string"
+      ? extraParams.toolResultModel
+      : typeof extraParams?.tool_result_model === "string"
+        ? extraParams.tool_result_model
+        : undefined;
+  const trimmed = raw?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const slashIndex = trimmed.indexOf("/");
+  if (slashIndex === -1) {
+    return trimmed;
+  }
+  const providerId = trimmed.slice(0, slashIndex).trim();
+  const modelId = trimmed.slice(slashIndex + 1).trim();
+  if (!modelId) {
+    return undefined;
+  }
+  return normalizeLowercaseStringOrEmpty(providerId) === normalizeLowercaseStringOrEmpty(provider)
+    ? modelId
+    : undefined;
+}
+
+function shouldRouteToolResultFollowup(messages: unknown): boolean {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return false;
+  }
+  const lastMessage = messages.at(-1);
+  return (
+    Boolean(lastMessage) &&
+    typeof lastMessage === "object" &&
+    (lastMessage as { role?: unknown }).role === "toolResult"
+  );
+}
+
 function resolveSub2ApiOpenAICacheRetention(
   extraParams: Record<string, unknown> | undefined,
 ): OpenAICacheRetention | undefined {
@@ -177,6 +217,32 @@ function createSub2ApiCodexNativeWebSearchWrapper(
     });
 }
 
+function createSub2ApiToolResultModelWrapper(
+  baseStreamFn: StreamFn | undefined,
+  ctx: ProviderWrapStreamFnContext,
+): StreamFn {
+  const underlying = baseStreamFn ?? streamSimple;
+  const toolResultModelId = resolveSub2ApiToolResultModelId(ctx.extraParams, ctx.provider);
+  return (model, context, options) => {
+    if (
+      !toolResultModelId ||
+      model.id === toolResultModelId ||
+      !shouldRouteToolResultFollowup(context.messages)
+    ) {
+      return underlying(model, context, options);
+    }
+    return underlying(
+      {
+        ...model,
+        id: toolResultModelId,
+        name: toolResultModelId,
+      },
+      context,
+      options,
+    );
+  };
+}
+
 export function wrapSub2ApiOpenAIProviderStream(
   ctx: ProviderWrapStreamFnContext,
 ): StreamFn | undefined {
@@ -216,6 +282,7 @@ export function wrapSub2ApiOpenAIProviderStream(
             cacheRetention,
           })
       : undefined,
+    (streamFn) => createSub2ApiToolResultModelWrapper(streamFn, ctx),
   );
 }
 
