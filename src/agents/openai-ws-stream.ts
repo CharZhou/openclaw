@@ -322,10 +322,14 @@ function isWsSessionDegraded(session: WsSession): boolean {
 
 function createWsManager(
   managerOptions: OpenAIWebSocketManagerOptions | undefined,
+  model: Parameters<StreamFn>[0],
   sessionHeaders?: Record<string, string>,
 ): OpenAIWebSocketManager {
+  const resolvedUrl =
+    managerOptions?.url ?? resolveOpenAIWebSocketUrl((model as { baseUrl?: string }).baseUrl);
   return openAIWsStreamDeps.createManager({
     ...managerOptions,
+    ...(resolvedUrl ? { url: resolvedUrl } : {}),
     ...(sessionHeaders
       ? {
           headers: {
@@ -352,12 +356,13 @@ function stringifyStable(value: unknown): string {
 
 function resolveWsManagerConfigSignature(
   managerOptions: OpenAIWebSocketManagerOptions | undefined,
+  model: Parameters<StreamFn>[0],
   sessionHeaders?: Record<string, string>,
 ): string {
   return stringifyStable({
     headers: sessionHeaders,
     request: managerOptions?.request,
-    url: managerOptions?.url,
+    url: managerOptions?.url ?? resolveOpenAIWebSocketUrl((model as { baseUrl?: string }).baseUrl),
   });
 }
 
@@ -398,6 +403,32 @@ function isAzureOpenAIBaseUrl(baseUrl?: string): boolean {
     return normalizeLowercaseStringOrEmpty(new URL(trimmed).hostname).endsWith(".openai.azure.com");
   } catch {
     return false;
+  }
+}
+
+function resolveOpenAIWebSocketUrl(baseUrl?: string): string | undefined {
+  const trimmed = baseUrl?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return undefined;
+    }
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    const normalizedPath = url.pathname.replace(/\/+$/, "");
+    url.pathname =
+      normalizedPath === ""
+        ? "/responses"
+        : normalizedPath.endsWith("/responses")
+          ? normalizedPath
+          : `${normalizedPath}/responses`;
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return undefined;
   }
 }
 
@@ -688,10 +719,11 @@ export function createOpenAIWebSocketStreamFn(
         let session = wsRegistry.get(sessionId);
         const managerConfigSignature = resolveWsManagerConfigSignature(
           opts.managerOptions,
+          model,
           sessionHeaders,
         );
         if (!session) {
-          const manager = createWsManager(opts.managerOptions, sessionHeaders);
+          const manager = createWsManager(opts.managerOptions, model, sessionHeaders);
           session = {
             manager,
             managerConfigSignature,
@@ -706,7 +738,7 @@ export function createOpenAIWebSocketStreamFn(
         } else if (session.managerConfigSignature !== managerConfigSignature) {
           resetWsSession({
             session,
-            createManager: () => createWsManager(opts.managerOptions, sessionHeaders),
+            createManager: () => createWsManager(opts.managerOptions, model, sessionHeaders),
           });
           session.managerConfigSignature = managerConfigSignature;
           session.degradeCooldownMs = wsSessionPolicy.degradeCooldownMs;
@@ -737,7 +769,7 @@ export function createOpenAIWebSocketStreamFn(
             markWsSessionDegraded(session);
             resetWsSession({
               session,
-              createManager: () => createWsManager(opts.managerOptions, sessionHeaders),
+              createManager: () => createWsManager(opts.managerOptions, model, sessionHeaders),
               preserveDegradeUntil: true,
             });
             if (transport === "websocket") {
@@ -766,7 +798,7 @@ export function createOpenAIWebSocketStreamFn(
           markWsSessionDegraded(session);
           resetWsSession({
             session,
-            createManager: () => createWsManager(opts.managerOptions, sessionHeaders),
+            createManager: () => createWsManager(opts.managerOptions, model, sessionHeaders),
             preserveDegradeUntil: true,
           });
           return fallbackToHttp(model, context, options, apiKey, eventStream, opts.signal, {
@@ -818,7 +850,7 @@ export function createOpenAIWebSocketStreamFn(
               /* ignore */
             }
             try {
-              session.manager = createWsManager(opts.managerOptions, sessionHeaders);
+              session.manager = createWsManager(opts.managerOptions, model, sessionHeaders);
               await session.manager.connect(apiKey);
               session.everConnected = true;
               session.degradedUntil = null;
@@ -827,7 +859,7 @@ export function createOpenAIWebSocketStreamFn(
               markWsSessionDegraded(session);
               resetWsSession({
                 session,
-                createManager: () => createWsManager(opts.managerOptions, sessionHeaders),
+                createManager: () => createWsManager(opts.managerOptions, model, sessionHeaders),
                 preserveDegradeUntil: true,
               });
               if (transport === "websocket") {
@@ -911,7 +943,7 @@ export function createOpenAIWebSocketStreamFn(
             );
             resetWsSession({
               session,
-              createManager: () => createWsManager(opts.managerOptions, sessionHeaders),
+              createManager: () => createWsManager(opts.managerOptions, model, sessionHeaders),
             });
             continue;
           }
@@ -922,7 +954,7 @@ export function createOpenAIWebSocketStreamFn(
             markWsSessionDegraded(session);
             resetWsSession({
               session,
-              createManager: () => createWsManager(opts.managerOptions, sessionHeaders),
+              createManager: () => createWsManager(opts.managerOptions, model, sessionHeaders),
               preserveDegradeUntil: true,
             });
             return fallbackToHttp(model, context, options, apiKey, eventStream, opts.signal, {
@@ -1184,7 +1216,7 @@ export function createOpenAIWebSocketStreamFn(
             );
             resetWsSession({
               session,
-              createManager: () => createWsManager(opts.managerOptions, sessionHeaders),
+              createManager: () => createWsManager(opts.managerOptions, model, sessionHeaders),
             });
             continue;
           }
@@ -1195,7 +1227,7 @@ export function createOpenAIWebSocketStreamFn(
             markWsSessionDegraded(session);
             resetWsSession({
               session,
-              createManager: () => createWsManager(opts.managerOptions, sessionHeaders),
+              createManager: () => createWsManager(opts.managerOptions, model, sessionHeaders),
               preserveDegradeUntil: true,
             });
             return fallbackToHttp(model, context, options, apiKey, eventStream, opts.signal, {
@@ -1298,5 +1330,8 @@ export const __testing = {
   },
   setWsDegradeCooldownMsForTest(nextMs?: number) {
     wsDegradeCooldownMsOverride = nextMs;
+  },
+  resolveOpenAIWebSocketUrlForTest(baseUrl?: string) {
+    return resolveOpenAIWebSocketUrl(baseUrl);
   },
 };

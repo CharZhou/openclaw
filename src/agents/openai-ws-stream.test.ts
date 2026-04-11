@@ -3540,6 +3540,14 @@ describe("releaseWsSession / hasWsSession", () => {
       // consume
     }
   });
+
+  it("derives a websocket URL from a custom openai-responses baseUrl", () => {
+    expect(
+      openAIWsStreamTesting.resolveOpenAIWebSocketUrlForTest(
+        "https://sub2api.example.com/openai/v1",
+      ),
+    ).toBe("wss://sub2api.example.com/openai/v1/responses");
+  });
 });
 
 describe("convertMessagesToInputItems — phase inheritance", () => {
